@@ -1,11 +1,5 @@
 package com.tuapp.ecg;
 
-import androidx.documentfile.provider.DocumentFile;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.FileOutputStream;
-import java.io.File;
-
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Canvas;
@@ -17,6 +11,7 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
+import android.widget.Toast;
 
 import android.util.Log;
 import android.net.Uri;
@@ -34,7 +29,7 @@ import com.github.mikephil.charting.interfaces.dataprovider.LineDataProvider;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.FileOutputStream;
-import java.io.FileInputStream;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -71,9 +66,9 @@ public class DiagnosticoActivity extends AppCompatActivity {
         setContentView(R.layout.activity_diagnostico);
 
         lblArchivo = findViewById(R.id.lblArchivo);
-        lblInfo = findViewById(R.id.lblInfo);
-        ecgChart = findViewById(R.id.ecgChart);
-        chkMA = findViewById(R.id.chkMA);
+        lblInfo    = findViewById(R.id.lblInfo);
+        ecgChart   = findViewById(R.id.ecgChart);
+        chkMA      = findViewById(R.id.chkMA);
         btnReporte = findViewById(R.id.btnReporte);
 
         Log.d("ECG_DEBUG", "=== INICIANDO DiagnosticoActivity ===");
@@ -93,14 +88,16 @@ public class DiagnosticoActivity extends AppCompatActivity {
             if (signalRaw != null) plot(checked);
         });
 
-        // === Botón "Generar Reporte" ===
         btnReporte.setOnClickListener(v -> {
-            if (signalRaw == null) return;
+            if (signalRaw == null) {
+                Toast.makeText(this, "Primero selecciona un archivo ECG.", Toast.LENGTH_SHORT).show();
+                return;
+            }
 
-            // === Detectar picos R ===
-            RPeakDetector.Result r = RPeakDetector.detectR(signalRaw, FS);
+            // === 1️⃣ Detectar picos R (nuevo detector robusto) ===
+            RPeakDetector.Result resultR = RPeakDetector.detectR(signalRaw, FS);
 
-            // === Leer hora de inicio desde el archivo .TST (si existe) ===
+            // === 2️⃣ Leer hora de inicio desde el archivo .TST (si existe) ===
             String horaInicioTST = null;
             try {
                 if (tstPath != null) {
@@ -109,7 +106,7 @@ public class DiagnosticoActivity extends AppCompatActivity {
                         String line;
                         while ((line = br.readLine()) != null) {
                             if (line.startsWith("OPEN,")) {
-                                horaInicioTST = line.substring(5).trim();
+                                horaInicioTST = line.substring(5).trim(); // ej. "2025-10-06 10:27:11"
                                 Log.d("ECG_DEBUG", "Hora base detectada: " + horaInicioTST);
                                 break;
                             }
@@ -122,35 +119,36 @@ public class DiagnosticoActivity extends AppCompatActivity {
                 Log.e("ECG_DEBUG", "Error leyendo hora del .TST", e);
             }
 
-            // === Generar el reporte base ===
+            // === 3️⃣ Construir el reporte base ===
             Metrics.Report rep = Metrics.buildReport(
-                    r,
-                    null,
-                    new File(ecgPath).getName(),
+                    resultR,
+                    null,                                   // no usamos lista de timestamps explícita
+                    new File(ecgPath).getName(),            // nombre del archivo ECG
                     durationSec,
-                    horaInicioTST
+                    horaInicioTST                           // hora base tomada del .TST
             );
 
-            // === Enlazar hora real usando TstIndex ===
-            if (tstPath != null) {
-                timeIndex = TstIndex.parse(new File(tstPath));
-                if (timeIndex != null) {
-                    Log.d("ECG_DEBUG", "Hora de inicio del TST: " + timeIndex.startDisplay);
-                    for (Metrics.Event e : rep.topHigh) {
-                        e.timestamp = timeIndex.sampleToDateTimeString((int) Math.round(e.timeSec * FS));
-                    }
-                    for (Metrics.Event e : rep.topLow) {
-                        e.timestamp = timeIndex.sampleToDateTimeString((int) Math.round(e.timeSec * FS));
-                    }
-                    rep.studyStart = timeIndex.startDisplay;
+            // === 4️⃣ Si hay índice temporal (.TST), asociar timestamps reales ===
+            if (timeIndex != null) {
+                for (Metrics.Event e : rep.topHigh) {
+                    e.timestamp = timeIndex.sampleToDateTimeString(
+                            (int) Math.round(e.timeSec * FS)
+                    );
                 }
+                for (Metrics.Event e : rep.topLow) {
+                    e.timestamp = timeIndex.sampleToDateTimeString(
+                            (int) Math.round(e.timeSec * FS)
+                    );
+                }
+                rep.studyStart = timeIndex.startDisplay;
+                Log.d("ECG_DEBUG", "Hora de inicio del TST: " + rep.studyStart);
             }
 
-            // === Guardar en caché para el ReportActivity ===
+            // === 5️⃣ Guardar temporalmente el reporte en la caché ===
             String key = "rep_" + System.currentTimeMillis();
             ReportCache.put(key, rep);
 
-            // === Lanzar ReportActivity ===
+            // === 6️⃣ Lanzar ReportActivity con la clave ===
             Intent intent = new Intent(DiagnosticoActivity.this, ReportActivity.class);
             intent.putExtra("reportKey", key);
             startActivity(intent);
@@ -160,11 +158,9 @@ public class DiagnosticoActivity extends AppCompatActivity {
         setupChartAesthetics();
     }
 
-    /**
-     * ============================
-     * Apariencia inicial
-     * ============================
-     */
+    /** ============================
+     *   Apariencia inicial
+     *  ============================ */
     private void setupChartAesthetics() {
         ecgChart.setNoDataText("Selecciona un archivo ECG para visualizar.");
         ecgChart.setBackgroundColor(Color.rgb(255, 245, 245)); // papel ECG
@@ -189,11 +185,9 @@ public class DiagnosticoActivity extends AppCompatActivity {
         ecgChart.setRenderer(new ECGPaperRenderer(ecgChart, ecgChart.getAnimator(), ecgChart.getViewPortHandler()));
     }
 
-    /**
-     * ============================
-     * Lectura del archivo ECG
-     * ============================
-     */
+    /** ============================
+     *   Lectura del archivo ECG
+     *  ============================ */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -203,8 +197,6 @@ public class DiagnosticoActivity extends AppCompatActivity {
             try {
                 String name = getFileNameFromUri(uri);
                 lblArchivo.setText("Archivo: " + name);
-
-                // === Copiar ECG seleccionado a caché ===
                 File tmpEcg = new File(getCacheDir(), name);
                 try (InputStream in = getContentResolver().openInputStream(uri);
                      OutputStream out = new FileOutputStream(tmpEcg)) {
@@ -212,57 +204,20 @@ public class DiagnosticoActivity extends AppCompatActivity {
                     int n;
                     while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
                 }
-                Log.d("ECG_DEBUG", "✅ ECG copiado a caché: " + tmpEcg.getAbsolutePath());
                 ecgPath = tmpEcg.getAbsolutePath();
 
-                // === Intentar hallar el .TST ===
-                String baseName = name.replace(".ECG", "");
-                String tstName = baseName + ".TST";
-                tstPath = null;
-
-                // 1️⃣ Intentar abrir en misma ubicación (mismo Uri pero extensión .TST)
-                try {
-                    String tstUriStr = uri.toString().replace(".ECG", ".TST");
-                    Uri tstUri = Uri.parse(tstUriStr);
-                    try (InputStream in = getContentResolver().openInputStream(tstUri)) {
-                        if (in != null) {
-                            File tmpTst = new File(getCacheDir(), tstName);
-                            try (OutputStream out = new FileOutputStream(tmpTst)) {
-                                byte[] buf = new byte[4096];
-                                int n;
-                                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
-                            }
-                            tstPath = tmpTst.getAbsolutePath();
-                            Log.d("ECG_DEBUG", "✅ Archivo TST abierto por derivación de URI");
-                        }
-                    }
-                } catch (Exception e) {
-                    Log.w("ECG_DEBUG", "No se pudo abrir .TST por derivación directa");
-                }
-
-                // 2️⃣ Intentar abrir desde carpeta pública “Downloads”
-                if (tstPath == null) {
-                    File downloads = android.os.Environment
-                            .getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS);
-                    File altTst = new File(downloads, tstName);
-                    if (altTst.exists()) {
-                        File tmpTst = new File(getCacheDir(), tstName);
-                        try (InputStream in = new FileInputStream(altTst);
-                             OutputStream out = new FileOutputStream(tmpTst)) {
-                            byte[] buf = new byte[4096];
-                            int n;
-                            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
-                        }
-                        tstPath = tmpTst.getAbsolutePath();
-                        Log.d("ECG_DEBUG", "✅ Archivo TST encontrado en /Download");
-                    }
-                }
-
-                if (tstPath == null)
+                // Intentamos también localizar/copiar el .TST (si el usuario seleccionó desde una carpeta que permita)
+                File tstCandidate = new File(tmpEcg.getParent(), name.replace(".ECG", ".TST"));
+                if (tstCandidate.exists()) {
+                    tstPath = tstCandidate.getAbsolutePath();
+                    Log.d("ECG_DEBUG", "✅ .TST encontrado en caché: " + tstPath);
+                } else {
+                    // Si no está en caché, dejamos tstPath = null — tu flujo puede copiar .TST manualmente si procede.
+                    tstPath = null;
                     Log.w("ECG_DEBUG", "⚠️ No se encontró archivo TST correspondiente");
+                }
 
                 loadFileAndPlot(tmpEcg);
-
             } catch (Exception e) {
                 lblArchivo.setText("❌ Error cargando el archivo ECG");
                 Log.e("ECG_DEBUG", "Error cargando ECG", e);
@@ -270,15 +225,11 @@ public class DiagnosticoActivity extends AppCompatActivity {
         }
     }
 
-
-
-
-    /**
-     * ============================
-     * Conversión ADC → mV
-     * ============================
-     */
+    /** ============================
+     *   Conversión ADC → mV
+     *  ============================ */
     private void loadFileAndPlot(File ecgFile) throws Exception {
+        Log.d("ECG_DEBUG", "Leyendo archivo ECG: " + ecgFile.getAbsolutePath());
         double[] adcRaw = ECGReader.readECGBigEndianUint16(ecgFile, 0);
         signalRaw = new double[adcRaw.length];
         for (int i = 0; i < adcRaw.length; i++) {
@@ -287,23 +238,21 @@ public class DiagnosticoActivity extends AppCompatActivity {
         }
         durationSec = signalRaw.length / FS;
         signalMA = Filters.movingAverageCentered(signalRaw, MA_N);
+
+        // parsear .TST desde la copia en caché (si existe)
         timeIndex = (tstPath != null) ? TstIndex.parse(new File(tstPath)) : null;
+        if (timeIndex != null) Log.d("ECG_DEBUG", "Hora de inicio del TST: " + timeIndex.startDisplay);
         plot(false);
     }
 
-    /**
-     * ============================
-     * Gráfico MPAndroidChart
-     * ============================
-     */
+    /** ============================
+     *   Gráfico MPAndroidChart
+     *  ============================ */
     private void plot(boolean useMA) {
         double[] y = useMA ? signalMA : signalRaw;
         ArrayList<Entry> entries = new ArrayList<>();
-        float t = 0f, dt = (float) (1.0 / FS);
-        for (double v : y) {
-            entries.add(new Entry(t, (float) v));
-            t += dt;
-        }
+        float t = 0f, dt = (float)(1.0 / FS);
+        for (double v : y) { entries.add(new Entry(t, (float) v)); t += dt; }
 
         LineDataSet dataSet = new LineDataSet(entries, useMA ? "ECG (MA=9)" : "ECG crudo");
         dataSet.setColor(Color.BLACK);
@@ -339,12 +288,14 @@ public class DiagnosticoActivity extends AppCompatActivity {
     /**
      * ============================
      * Renderer personalizado tipo papel ECG
-     * ============================
+     *  ============================
      */
     static class ECGPaperRenderer extends LineChartRenderer {
         private final Paint thin, thick, bg;
         private final float smallTime = 0.04f;  // s (cuadro pequeño)
+        private final float bigTime = 0.20f;    // s (cuadro grande)
         private final float smallMV = 0.1f;     // mV (cuadro pequeño)
+        private final float bigMV = 0.5f;       // mV (cuadro grande)
 
         public ECGPaperRenderer(LineDataProvider chart,
                                 com.github.mikephil.charting.animation.ChartAnimator anim,
@@ -363,7 +314,7 @@ public class DiagnosticoActivity extends AppCompatActivity {
 
         @Override
         public void drawData(Canvas c) {
-            // Fondo rosa tipo papel ECG
+            // === Fondo rosa tipo papel ECG ===
             c.drawRect(mViewPortHandler.getContentRect(), bg);
 
             float xMin = mChart.getXChartMin();
@@ -371,7 +322,7 @@ public class DiagnosticoActivity extends AppCompatActivity {
             float yMin = mChart.getYChartMin();
             float yMax = mChart.getYChartMax();
 
-            // Cuadros verticales (tiempo)
+            // === Cuadros verticales (tiempo) ===
             for (float x = xMin; x <= xMax; x += smallTime) {
                 float[] pts = new float[]{x, 0f};
                 mChart.getTransformer(YAxis.AxisDependency.LEFT).pointValuesToPixel(pts);
@@ -379,7 +330,7 @@ public class DiagnosticoActivity extends AppCompatActivity {
                 c.drawLine(pts[0], mViewPortHandler.contentTop(), pts[0], mViewPortHandler.contentBottom(), p);
             }
 
-            // Cuadros horizontales (amplitud)
+            // === Cuadros horizontales (amplitud en mV) ===
             for (float y = yMin; y <= yMax; y += smallMV) {
                 float[] pts = new float[]{0f, y};
                 mChart.getTransformer(YAxis.AxisDependency.LEFT).pointValuesToPixel(pts);
@@ -387,6 +338,7 @@ public class DiagnosticoActivity extends AppCompatActivity {
                 c.drawLine(mViewPortHandler.contentLeft(), pts[1], mViewPortHandler.contentRight(), pts[1], p);
             }
 
+            // === Finalmente, dibujar la señal ECG ===
             super.drawData(c);
         }
     }
@@ -394,7 +346,7 @@ public class DiagnosticoActivity extends AppCompatActivity {
     /**
      * ============================
      * Parser .TST (timestamps)
-     * ============================
+     *  ============================
      */
     static class TstIndex {
         final TreeMap<Integer, Long> blockToMillis = new TreeMap<>();
@@ -437,6 +389,7 @@ public class DiagnosticoActivity extends AppCompatActivity {
             if (e == null) e = blockToMillis.firstEntry();
             int blk0 = e.getKey();
             long t0 = e.getValue();
+            double FS = DiagnosticoActivity.FS;
             double seconds = (blk - blk0) * (blockSize / FS)
                     + (sampleIndex - blk * blockSize) / FS;
             Calendar cal = Calendar.getInstance();
@@ -444,4 +397,5 @@ public class DiagnosticoActivity extends AppCompatActivity {
             return DateFormat.format("yyyy-MM-dd HH:mm:ss", cal).toString();
         }
     }
+
 }

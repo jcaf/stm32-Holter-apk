@@ -1,25 +1,46 @@
 package com.tuapp.ecg;
 
 public class Filters {
-    /** Media móvil centrada, N impar (p.ej., 9). Devuelve nueva señal suavizada. */
+
+    /**
+     * Filtro de media móvil centrada.
+     * Si la ventana N es mayor que el tamaño de la señal, devuelve una copia segura.
+     */
     public static double[] movingAverageCentered(double[] x, int N) {
-        if (N<1 || (N%2)==0) throw new IllegalArgumentException("N debe ser impar");
-        int n = x.length, half=N/2;
+        int n = (x != null) ? x.length : 0;
+        if (n == 0 || N < 1) return new double[0];
+
+        // Limitar tamaño de ventana si es mayor que la señal
+        if (N > n) N = n;
+        int half = N / 2;
         double[] y = new double[n];
-        double acc=0;
-        // inicial
-        for (int k=-half;k<=half;k++){
-            int idx = clamp(k,0,n-1);
-            acc += x[idx];
+
+        for (int i = 0; i < n; i++) {
+            int start = Math.max(0, i - half);
+            int end   = Math.min(n - 1, i + half);
+            double sum = 0;
+            for (int j = start; j <= end; j++) {
+                sum += x[j];
+            }
+            y[i] = sum / (end - start + 1);
         }
-        y[0] = acc/N;
-        for (int i=1;i<n;i++){
-            int outIdx = clamp(i-1-half, 0, n-1);
-            int inIdx  = clamp(i+half,   0, n-1);
-            acc += x[inIdx] - x[outIdx];
-            y[i] = acc/N;
-        }
+
         return y;
     }
-    private static int clamp(int v,int lo,int hi){ return Math.max(lo, Math.min(hi, v)); }
+
+    /**
+     * Filtro pasa altos simple: elimina componente DC por resta del promedio.
+     */
+    public static double[] removeDC(double[] x) {
+        int n = (x != null) ? x.length : 0;
+        if (n == 0) return new double[0];
+
+        double mean = 0;
+        for (double v : x) mean += v;
+        mean /= n;
+
+        double[] y = new double[n];
+        for (int i = 0; i < n; i++) y[i] = x[i] - mean;
+        return y;
+    }
 }
