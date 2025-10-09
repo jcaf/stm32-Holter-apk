@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- ==========================================================
+         TEMAS PRINCIPALES DE LA APLICACIÓN
+         ========================================================== -->
+
+    <!-- Tema base con AppCompat (más estable en versiones antiguas) -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">@color/design_default_color_primary</item>
+        <item name="colorPrimaryDark">@color/design_default_color_primary_dark</item>
+        <item name="colorAccent">@color/design_default_color_secondary</item>
+        <item name="android:statusBarColor">?attr/colorPrimaryDark</item>
+        <item name="android:navigationBarColor">?attr/colorPrimary</item>
+        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:fontFamily">sans-serif</item>
+    </style>
+
+    <!-- Tema alternativo con Material Components (si usas botones modernos, etc.) -->
+    <style name="AppTheme.Material" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/design_default_color_primary</item>
+        <item name="colorPrimaryVariant">@color/design_default_color_primary_dark</item>
+        <item name="colorSecondary">@color/design_default_color_secondary</item>
+        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:fontFamily">sans-serif</item>
+    </style>
+
+    <!-- ==========================================================
+         ESTILOS PERSONALIZADOS DE COMPONENTES
+         ========================================================== -->
+
+    <!-- Encabezado de secciones -->
+    <style name="SectionHeader">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/design_default_color_primary</item>
+        <item name="android:paddingTop">16dp</item>
+        <item name="android:paddingBottom">4dp</item>
+    </style>
+
+    <!-- Fila de datos (etiqueta + valor) -->
+    <style name="FieldRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:paddingVertical">2dp</item>
+    </style>
+
+    <!-- Etiqueta de campo -->
+    <style name="FieldLabel">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:paddingEnd">8dp</item>
+        <item name="android:minWidth">80dp</item>
+    </style>
+
+    <!-- Datos de sólo lectura -->
+    <style name="FieldData">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">14sp</item>
+    </style>
+
+    <!-- Campo editable de una sola línea -->
+    <style name="FieldInput">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:inputType">text</item>
+        <item name="android:paddingTop">4dp</item>
+        <item name="android:textSize">16sp</item>
+    </style>
+
+    <!-- Campo editable de múltiples líneas -->
+    <style name="FieldInputMultiline" parent="FieldInput">
+        <item name="android:inputType">textMultiLine</item>
+        <item name="android:minLines">3</item>
+        <item name="android:gravity">top</item>
+    </style>
+
+</resources>

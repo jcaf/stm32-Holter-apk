@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <EditText android:id="@+id/edMedico" android:hint="Médico" android:layout_width="match_parent" android:layout_height="wrap_content" />
+        <EditText android:id="@+id/edLugar" android:hint="Lugar" android:layout_width="match_parent" android:layout_height="wrap_content" />
+        <EditText android:id="@+id/edFecha" android:hint="Fecha" android:layout_width="match_parent" android:layout_height="wrap_content" />
+        <EditText android:id="@+id/edDuracion" android:hint="Duración" android:layout_width="match_parent" android:layout_height="wrap_content" />
+        <EditText android:id="@+id/edPaciente" android:hint="Paciente" android:layout_width="match_parent" android:layout_height="wrap_content" />
+        <EditText android:id="@+id/edDni" android:hint="DNI" android:layout_width="match_parent" android:layout_height="wrap_content" />
+        <EditText android:id="@+id/edEdad" android:hint="Edad" android:layout_width="match_parent" android:layout_height="wrap_content" />
+        <EditText android:id="@+id/edSexo" android:hint="Sexo" android:layout_width="match_parent" android:layout_height="wrap_content" />
+        <EditText android:id="@+id/edAntecedentes" android:hint="Antecedentes" android:layout_width="match_parent" android:layout_height="wrap_content" />
+        <EditText android:id="@+id/edResultados" android:hint="Resultados" android:layout_width="match_parent" android:layout_height="wrap_content" />
+        <EditText android:id="@+id/edRecomendaciones" android:hint="Recomendaciones" android:layout_width="match_parent" android:layout_height="wrap_content" />
+
+        <TextView android:id="@+id/txtEventosHigh" android:text="Eventos High: -" android:layout_width="match_parent" android:layout_height="wrap_content" />
+        <TextView android:id="@+id/txtEventosLow" android:text="Eventos Low: -" android:layout_width="match_parent" android:layout_height="wrap_content" />
+        <TextView android:id="@+id/txtResumen" android:text="Resumen:" android:layout_width="match_parent" android:layout_height="wrap_content" />
+
+        <Button android:id="@+id/btnGuardar" android:text="Guardar reporte" android:layout_width="match_parent" android:layout_height="wrap_content" />
+    </LinearLayout>
+</ScrollView>

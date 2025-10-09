@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:id="@+id/rootLayout"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <!-- Contenedor para la información y el botón de selección de archivo -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:baselineAligned="false">
+
+            <!-- Columna de Textos (Ocupa la mayor parte del espacio) -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <!-- Texto del archivo -->
+                <TextView
+                    android:id="@+id/lblArchivo"
+                    android:text="Archivo:"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+
+                <!-- Información del archivo -->
+                <TextView
+                    android:id="@+id/lblInfo"
+                    android:text="Información del archivo"
+                    android:textSize="14sp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp" />
+            </LinearLayout>
+
+            <!-- Botón para seleccionar archivo ECG (btnSeleccionar) -->
+            <Button
+                android:id="@+id/btnSeleccionar"
+                android:text="Cargar .ECG"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:layout_marginStart="16dp"
+                android:minHeight="0dp"
+                android:minWidth="0dp"/>
+
+        </LinearLayout>
+        
+        <!-- Línea separadora visual -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#CCCCCC"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp"/>
+
+        <!-- Checkbox modo automático (He cambiado el texto de "Modo automático" a "Suavizado MA" para que coincida con DiagnosticoActivity.java) -->
+        <CheckBox
+            android:id="@+id/chkMA"
+            android:text="Aplicar Suavizado (Media Móvil)"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" />
+
+        <!-- Contenedor para la gráfica del ECG -->
+        <FrameLayout
+            android:id="@+id/graphContainer"
+            android:layout_width="match_parent"
+            android:layout_height="300dp"
+            android:background="#EEEEEE"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="12dp">
+
+            <!-- Aquí se mostrará el gráfico -->
+            <com.github.mikephil.charting.charts.LineChart
+                android:id="@+id/ecgChart"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+        </FrameLayout>
+
+        <!-- Botón para ir al reporte -->
+        <Button
+            android:id="@+id/btnReporte"
+            android:text="Generar Reporte"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+    </LinearLayout>
+</ScrollView>
