@@ -338,9 +338,9 @@ public class DiagnosticoActivity extends AppCompatActivity {
     static class ECGPaperRenderer extends LineChartRenderer {
         private final Paint thin, thick, bg;
         private final float smallTime = 0.04f;  // 1 cuadro pequeño = 0.04 s
-        private final float bigTime = 0.20f;    // 1 cuadro grande = 0.20 s
-        private final float smallMV = 0.1f;     // 1 cuadro pequeño = 0.1 mV
-        private final float bigMV = 0.5f;       // 1 cuadro grande = 0.5 mV
+        private final float bigTime   = 0.20f;  // 1 cuadro grande = 0.20 s
+        private final float smallMV   = 0.1f;   // 1 cuadro pequeño = 0.1 mV
+        private final float bigMV     = 0.5f;   // 1 cuadro grande = 0.5 mV
 
         public ECGPaperRenderer(LineDataProvider chart,
                                 com.github.mikephil.charting.animation.ChartAnimator anim,
@@ -348,15 +348,15 @@ public class DiagnosticoActivity extends AppCompatActivity {
             super(chart, anim, viewPortHandler);
 
             thin = new Paint();
-            thin.setColor(Color.rgb(255, 210, 210)); // rosa claro
+            thin.setColor(Color.rgb(255, 210, 210)); // línea fina
             thin.setStrokeWidth(1f);
 
             thick = new Paint();
-            thick.setColor(Color.rgb(255, 120, 120)); // rojo más fuerte
+            thick.setColor(Color.rgb(255, 120, 120)); // línea gruesa
             thick.setStrokeWidth(2f);
 
             bg = new Paint();
-            bg.setColor(Color.rgb(255, 245, 245)); // fondo ECG
+            bg.setColor(Color.rgb(255, 245, 245)); // fondo
             bg.setStyle(Paint.Style.FILL);
         }
 
@@ -365,47 +365,54 @@ public class DiagnosticoActivity extends AppCompatActivity {
             // Fondo ECG
             c.drawRect(mViewPortHandler.getContentRect(), bg);
 
+            // CAST al LineChart para acceder a métodos visuales
+            LineChart chart = (LineChart) mChart;
+
             // Rango visible actual
-            float xMin = mChart.getLowestVisibleX();
-            float xMax = mChart.getHighestVisibleX();
+            float xMin = chart.getLowestVisibleX();
+            float xMax = chart.getHighestVisibleX();
 
-            YAxis yAxis = ((LineChart) mChart).getAxisLeft();
-
+            YAxis yAxis = chart.getAxisLeft();
             float yMin = yAxis.mAxisMinimum;
             float yMax = yAxis.mAxisMaximum;
 
-            // Transformer del eje Y
             final com.github.mikephil.charting.utils.Transformer trans =
-                    mChart.getTransformer(YAxis.AxisDependency.LEFT);
+                    chart.getTransformer(YAxis.AxisDependency.LEFT);
 
             float[] pts = new float[2];
 
-            // === Cuadros verticales (tiempo) ===
+            // --- Cuadros verticales (tiempo) usando índice entero para evitar drift ---
             float startX = (float) Math.floor(xMin / smallTime) * smallTime;
-            for (float x = startX; x <= xMax; x += smallTime) {
-                pts[0] = x; pts[1] = yMin;
+            int nX = (int) Math.ceil((xMax - startX) / smallTime);
+            for (int i = 0; i <= nX; i++) {
+                float x = startX + i * smallTime;
+                pts[0] = x; pts[1] = yMin;               // transforma un punto cualquiera con ese X
                 trans.pointValuesToPixel(pts);
                 float xPix = pts[0];
-                boolean major = Math.abs((x / bigTime) - Math.round(x / bigTime)) < 1e-3;
+                boolean major = (i % 5 == 0);            // cada 5 cuadros pequeños = 0.20s
                 c.drawLine(xPix, mViewPortHandler.contentTop(), xPix, mViewPortHandler.contentBottom(),
                         major ? thick : thin);
             }
 
-            // === Cuadros horizontales (amplitud mV) ===
+            // --- Cuadros horizontales (amplitud) usando índice entero también ---
             float startY = (float) Math.floor(yMin / smallMV) * smallMV;
-            for (float y = startY; y <= yMax; y += smallMV) {
+            int nY = (int) Math.ceil((yMax - startY) / smallMV);
+            for (int j = 0; j <= nY; j++) {
+                float y = startY + j * smallMV;
                 pts[0] = xMin; pts[1] = y;
                 trans.pointValuesToPixel(pts);
                 float yPix = pts[1];
-                boolean major = Math.abs((y / bigMV) - Math.round(y / bigMV)) < 1e-3;
+                boolean major = (j % 5 == 0);            // cada 5 cuadros pequeños = 0.5mV
                 c.drawLine(mViewPortHandler.contentLeft(), yPix, mViewPortHandler.contentRight(), yPix,
                         major ? thick : thin);
             }
 
-            // === Dibuja señal ECG ===
+            // Dibuja la señal ECG encima
             super.drawData(c);
         }
     }
+
+
 
 
     /**
