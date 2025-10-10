@@ -83,11 +83,39 @@
             android:layout_marginTop="12dp"
             android:layout_marginBottom="12dp">
 
+            <!-- Gráfico ECG -->
             <com.github.mikephil.charting.charts.LineChart
                 android:id="@+id/ecgChart"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent" />
+                android:layout_height="match_parent"
+                android:layout_gravity="center" />
+
+            <!-- Etiqueta eje Y (Amplitud) -->
+            <TextView
+                android:id="@+id/labelYAxis"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Amplitud (mV)"
+                android:textColor="#000000"
+                android:textSize="12sp"
+                android:rotation="-90"
+                android:layout_gravity="center_vertical|start"
+                android:layout_marginStart="4dp"
+                android:layout_marginTop="8dp" />
+
+            <!-- Etiqueta eje X (Tiempo) -->
+            <TextView
+                android:id="@+id/labelXAxis"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Tiempo (s)"
+                android:textColor="#000000"
+                android:textSize="12sp"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginBottom="4dp" />
+
         </FrameLayout>
+
 
         <!-- Botón para ir al reporte -->
         <Button

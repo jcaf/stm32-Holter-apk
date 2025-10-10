@@ -25,6 +25,10 @@ import com.github.mikephil.charting.data.LineDataSet;
 import com.github.mikephil.charting.renderer.LineChartRenderer;
 import com.github.mikephil.charting.utils.ViewPortHandler;
 import com.github.mikephil.charting.interfaces.dataprovider.LineDataProvider;
+import com.github.mikephil.charting.components.XAxis;
+import com.github.mikephil.charting.components.YAxis;
+import com.github.mikephil.charting.components.AxisBase;
+import com.github.mikephil.charting.formatter.ValueFormatter;
 
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -172,21 +176,59 @@ public class DiagnosticoActivity extends AppCompatActivity {
         ecgChart.setPinchZoom(true);
         ecgChart.getDescription().setEnabled(false);
 
+        // === EJE X: tiempo (s)
         XAxis xAxis = ecgChart.getXAxis();
         xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
-        xAxis.setTextColor(Color.DKGRAY);
-        xAxis.setDrawGridLines(false);
+        xAxis.setDrawGridLines(true);
+        xAxis.setGranularity(0.04f);
+        xAxis.setGranularityEnabled(true);
+        xAxis.setTextColor(Color.BLACK);
+        xAxis.setAxisLineColor(Color.RED);
+        xAxis.setAxisLineWidth(1.5f);
+        xAxis.setValueFormatter(new ValueFormatter() {
+            @Override
+            public String getAxisLabel(float value, AxisBase axis) {
+                return String.format(Locale.US, "%.1f", value);
+            }
+        });
+        xAxis.setLabelCount(6, true);
+        xAxis.setDrawAxisLine(true);
+        xAxis.setDrawLabels(true);
 
+// === EJE Y: amplitud (mV)
         YAxis leftAxis = ecgChart.getAxisLeft();
-        leftAxis.setTextColor(Color.DKGRAY);
-        leftAxis.setDrawGridLines(false);
+        leftAxis.setDrawGridLines(true);
+        leftAxis.setGranularity(0.1f);
+        leftAxis.setGranularityEnabled(true);
+        leftAxis.setTextColor(Color.BLACK);
+        leftAxis.setAxisLineColor(Color.RED);
+        leftAxis.setAxisLineWidth(1.5f);
         leftAxis.setAxisMinimum((float) Y_MIN_MV);
         leftAxis.setAxisMaximum((float) Y_MAX_MV);
+        leftAxis.setValueFormatter(new ValueFormatter() {
+            @Override
+            public String getAxisLabel(float value, AxisBase axis) {
+                return String.format(Locale.US, "%.1f", value);
+            }
+        });
+        leftAxis.setLabelCount(6, true);
+        leftAxis.setDrawAxisLine(true);
+        leftAxis.setDrawLabels(true);
+
+// Desactiva eje derecho (no se usa en ECG)
         ecgChart.getAxisRight().setEnabled(false);
 
-        // Reemplazamos el renderer estándar por uno que dibuja papel ECG
+
+        // === Render personalizado: papel ECG ===
         ecgChart.setRenderer(new ECGPaperRenderer(ecgChart, ecgChart.getAnimator(), ecgChart.getViewPortHandler()));
+
+        // Etiquetas descriptivas visibles
+        ecgChart.getDescription().setEnabled(true);
+        ecgChart.getDescription().setText("Tiempo (s)   |   Amplitud (mV)");
+        ecgChart.getDescription().setTextColor(Color.DKGRAY);
+        ecgChart.getDescription().setTextSize(12f);
     }
+
 
     /** ============================
      *   Lectura del archivo ECG
@@ -295,72 +337,81 @@ public class DiagnosticoActivity extends AppCompatActivity {
      */
     static class ECGPaperRenderer extends LineChartRenderer {
         private final Paint thin, thick, bg;
-        private final float smallTime = 0.04f;  // s (cuadro pequeño)
-        private final float bigTime = 0.20f;    // s (cuadro grande)
-        private final float smallMV = 0.1f;     // mV (cuadro pequeño)
-        private final float bigMV = 0.5f;       // mV (cuadro grande)
+        private final float smallTime = 0.04f;  // 1 cuadro pequeño = 0.04 s
+        private final float bigTime = 0.20f;    // 1 cuadro grande = 0.20 s
+        private final float smallMV = 0.1f;     // 1 cuadro pequeño = 0.1 mV
+        private final float bigMV = 0.5f;       // 1 cuadro grande = 0.5 mV
 
         public ECGPaperRenderer(LineDataProvider chart,
                                 com.github.mikephil.charting.animation.ChartAnimator anim,
                                 ViewPortHandler viewPortHandler) {
             super(chart, anim, viewPortHandler);
+
             thin = new Paint();
-            thin.setColor(Color.rgb(255, 210, 210));
+            thin.setColor(Color.rgb(255, 210, 210)); // rosa claro
             thin.setStrokeWidth(1f);
+
             thick = new Paint();
-            thick.setColor(Color.rgb(255, 120, 120));
+            thick.setColor(Color.rgb(255, 120, 120)); // rojo más fuerte
             thick.setStrokeWidth(2f);
+
             bg = new Paint();
-            bg.setColor(Color.rgb(255, 245, 245));
+            bg.setColor(Color.rgb(255, 245, 245)); // fondo ECG
             bg.setStyle(Paint.Style.FILL);
         }
 
         @Override
         public void drawData(Canvas c) {
-            // === Fondo tipo papel ECG ===
+            // Fondo ECG
             c.drawRect(mViewPortHandler.getContentRect(), bg);
 
-            float xMin = mChart.getXChartMin();
-            float xMax = mChart.getXChartMax();
-            float yMin = mChart.getYChartMin();
-            float yMax = mChart.getYChartMax();
+            // Rango visible actual
+            float xMin = mChart.getLowestVisibleX();
+            float xMax = mChart.getHighestVisibleX();
 
-            var trans = mChart.getTransformer(YAxis.AxisDependency.LEFT);
+            YAxis yAxis = ((LineChart) mChart).getAxisLeft();
+
+            float yMin = yAxis.mAxisMinimum;
+            float yMax = yAxis.mAxisMaximum;
+
+            // Transformer del eje Y
+            final com.github.mikephil.charting.utils.Transformer trans =
+                    mChart.getTransformer(YAxis.AxisDependency.LEFT);
+
+            float[] pts = new float[2];
 
             // === Cuadros verticales (tiempo) ===
-            // Alineamos el inicio al múltiplo más cercano de smallTime
-            float xStart = (float) (Math.floor(xMin / smallTime) * smallTime);
-            for (float x = xStart; x <= xMax; x += smallTime) {
-                float[] pts = new float[]{x, yMin, x, yMax};
+            float startX = (float) Math.floor(xMin / smallTime) * smallTime;
+            for (float x = startX; x <= xMax; x += smallTime) {
+                pts[0] = x; pts[1] = yMin;
                 trans.pointValuesToPixel(pts);
-                // Cada 5 cuadros pequeños (0.2s) → línea gruesa
-                boolean isBig = (Math.round((x - xStart) / smallTime) % 5 == 0);
-                Paint p = isBig ? thick : thin;
-                c.drawLine(pts[0], pts[1], pts[2], pts[3], p);
+                float xPix = pts[0];
+                boolean major = Math.abs((x / bigTime) - Math.round(x / bigTime)) < 1e-3;
+                c.drawLine(xPix, mViewPortHandler.contentTop(), xPix, mViewPortHandler.contentBottom(),
+                        major ? thick : thin);
             }
 
-            // === Cuadros horizontales (amplitud en mV) ===
-            float yStart = (float) (Math.floor(yMin / smallMV) * smallMV);
-            for (float y = yStart; y <= yMax; y += smallMV) {
-                float[] pts = new float[]{xMin, y, xMax, y};
+            // === Cuadros horizontales (amplitud mV) ===
+            float startY = (float) Math.floor(yMin / smallMV) * smallMV;
+            for (float y = startY; y <= yMax; y += smallMV) {
+                pts[0] = xMin; pts[1] = y;
                 trans.pointValuesToPixel(pts);
-                // Cada 5 cuadros pequeños (0.5mV) → línea gruesa
-                boolean isBig = (Math.round((y - yStart) / smallMV) % 5 == 0);
-                Paint p = isBig ? thick : thin;
-                c.drawLine(pts[0], pts[1], pts[2], pts[3], p);
+                float yPix = pts[1];
+                boolean major = Math.abs((y / bigMV) - Math.round(y / bigMV)) < 1e-3;
+                c.drawLine(mViewPortHandler.contentLeft(), yPix, mViewPortHandler.contentRight(), yPix,
+                        major ? thick : thin);
             }
 
-            // === Finalmente, dibujar la señal ECG ===
+            // === Dibuja señal ECG ===
             super.drawData(c);
         }
-
-
     }
+
 
     /**
      * ============================
      * Parser .TST (timestamps)
-     *  ============================
+     * ============================
      */
     static class TstIndex {
         final TreeMap<Integer, Long> blockToMillis = new TreeMap<>();
@@ -411,5 +462,4 @@ public class DiagnosticoActivity extends AppCompatActivity {
             return DateFormat.format("yyyy-MM-dd HH:mm:ss", cal).toString();
         }
     }
-
 }
