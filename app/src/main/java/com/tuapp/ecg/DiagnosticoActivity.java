@@ -317,7 +317,7 @@ public class DiagnosticoActivity extends AppCompatActivity {
 
         @Override
         public void drawData(Canvas c) {
-            // === Fondo rosa tipo papel ECG ===
+            // === Fondo tipo papel ECG ===
             c.drawRect(mViewPortHandler.getContentRect(), bg);
 
             float xMin = mChart.getXChartMin();
@@ -325,25 +325,36 @@ public class DiagnosticoActivity extends AppCompatActivity {
             float yMin = mChart.getYChartMin();
             float yMax = mChart.getYChartMax();
 
+            var trans = mChart.getTransformer(YAxis.AxisDependency.LEFT);
+
             // === Cuadros verticales (tiempo) ===
-            for (float x = xMin; x <= xMax; x += smallTime) {
-                float[] pts = new float[]{x, 0f};
-                mChart.getTransformer(YAxis.AxisDependency.LEFT).pointValuesToPixel(pts);
-                Paint p = (Math.abs((x / smallTime) % 5) < 0.001) ? thick : thin;
-                c.drawLine(pts[0], mViewPortHandler.contentTop(), pts[0], mViewPortHandler.contentBottom(), p);
+            // Alineamos el inicio al múltiplo más cercano de smallTime
+            float xStart = (float) (Math.floor(xMin / smallTime) * smallTime);
+            for (float x = xStart; x <= xMax; x += smallTime) {
+                float[] pts = new float[]{x, yMin, x, yMax};
+                trans.pointValuesToPixel(pts);
+                // Cada 5 cuadros pequeños (0.2s) → línea gruesa
+                boolean isBig = (Math.round((x - xStart) / smallTime) % 5 == 0);
+                Paint p = isBig ? thick : thin;
+                c.drawLine(pts[0], pts[1], pts[2], pts[3], p);
             }
 
             // === Cuadros horizontales (amplitud en mV) ===
-            for (float y = yMin; y <= yMax; y += smallMV) {
-                float[] pts = new float[]{0f, y};
-                mChart.getTransformer(YAxis.AxisDependency.LEFT).pointValuesToPixel(pts);
-                Paint p = (Math.abs((y / smallMV) % 5) < 0.001) ? thick : thin;
-                c.drawLine(mViewPortHandler.contentLeft(), pts[1], mViewPortHandler.contentRight(), pts[1], p);
+            float yStart = (float) (Math.floor(yMin / smallMV) * smallMV);
+            for (float y = yStart; y <= yMax; y += smallMV) {
+                float[] pts = new float[]{xMin, y, xMax, y};
+                trans.pointValuesToPixel(pts);
+                // Cada 5 cuadros pequeños (0.5mV) → línea gruesa
+                boolean isBig = (Math.round((y - yStart) / smallMV) % 5 == 0);
+                Paint p = isBig ? thick : thin;
+                c.drawLine(pts[0], pts[1], pts[2], pts[3], p);
             }
 
             // === Finalmente, dibujar la señal ECG ===
             super.drawData(c);
         }
+
+
     }
 
     /**
