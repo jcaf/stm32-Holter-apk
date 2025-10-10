@@ -73,9 +73,12 @@ public class DiagnosticoActivity extends AppCompatActivity {
 
         Log.d("ECG_DEBUG", "=== INICIANDO DiagnosticoActivity ===");
 
-        Button btnSeleccionar = new Button(this);
-        btnSeleccionar.setText("Seleccionar archivo ECG");
-        ((android.widget.LinearLayout) findViewById(R.id.rootLayout)).addView(btnSeleccionar, 0);
+//        Button btnSeleccionar = new Button(this);
+//        btnSeleccionar.setText("Seleccionar archivo ECG");
+//        ((android.widget.LinearLayout) findViewById(R.id.rootLayout)).addView(btnSeleccionar, 0);
+//
+        Button btnSeleccionar = findViewById(R.id.btnSeleccionarArchivo);
+
 
         btnSeleccionar.setOnClickListener(v -> {
             Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
