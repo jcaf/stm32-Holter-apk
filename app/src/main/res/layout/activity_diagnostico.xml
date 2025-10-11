@@ -1,74 +1,120 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/rootLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="8dp"
-    android:background="#FFF5F5">
+    android:background="#FFF5F5"
+    android:padding="8dp">
 
-    <!-- Información superior -->
+    <!-- Cabecera -->
     <TextView
         android:id="@+id/lblArchivo"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Archivo: "
-        android:textSize="16sp"
+        android:text="Archivo: (sin seleccionar)"
+        android:textColor="#000000"
         android:textStyle="bold"
+        android:textSize="16sp"
         android:padding="4dp" />
 
     <TextView
         android:id="@+id/lblInfo"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Información del archivo"
+        android:text="Información del ECG"
+        android:textColor="#444"
         android:textSize="14sp"
-        android:textColor="#555"
-        android:padding="4dp" />
+        android:paddingBottom="8dp" />
 
-    <!-- CheckBox de suavizado -->
-    <CheckBox
-        android:id="@+id/chkMA"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Aplicar suavizado (media móvil)"
-        android:padding="4dp" />
-
-    <!-- Contenedor desplazable para el gráfico -->
-    <HorizontalScrollView
+    <!-- Contenedor del gráfico -->
+    <LinearLayout
+        android:id="@+id/chartContainer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:fillViewport="true"
-        android:scrollbars="horizontal|vertical">
+        android:orientation="vertical"
+        android:background="#FFF5F5">
 
-        <FrameLayout
+        <com.github.mikephil.charting.charts.LineChart
+            android:id="@+id/ecgChart"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:background="#FFF5F5"
+            android:overScrollMode="never"
+            android:scrollbars="none" />
+
+        <!-- Etiqueta Scroll -->
+        <TextView
             android:layout_width="wrap_content"
-            android:layout_height="match_parent">
+            android:layout_height="wrap_content"
+            android:text="Desplazamiento horizontal"
+            android:textColor="#555"
+            android:textSize="12sp"
+            android:layout_gravity="center_horizontal"
+            android:paddingTop="4dp" />
 
-            <com.github.mikephil.charting.charts.LineChart
-                android:id="@+id/ecgChart"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:scrollbars="horizontal|vertical"
-                android:scrollbarStyle="insideOverlay"
-                android:scrollbarFadeDuration="0"
-                android:overScrollMode="never" />
+        <!-- Barra de desplazamiento -->
+        <SeekBar
+            android:id="@+id/scrollBar"
+            android:layout_width="match_parent"
+            android:layout_height="8dp"
+            android:progress="0"
+            android:max="100"
+            android:progressTint="#888888"
+            android:thumb="@android:color/transparent"
+            android:layout_marginBottom="6dp" />
 
-        </FrameLayout>
-    </HorizontalScrollView>
+        <!-- Etiqueta Zoom -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Zoom horizontal"
+            android:textColor="#555"
+            android:textSize="12sp"
+            android:layout_gravity="center_horizontal"
+            android:paddingTop="2dp" />
 
+        <!-- Barra de zoom -->
+        <SeekBar
+            android:id="@+id/zoomBar"
+            android:layout_width="match_parent"
+            android:layout_height="8dp"
+            android:progress="50"
+            android:max="100"
+            android:progressTint="#336699"
+            android:thumb="@android:color/transparent"
+            android:layout_marginBottom="4dp" />
+    </LinearLayout>
 
-    <!-- Botón inferior -->
-    <Button
-        android:id="@+id/btnReporte"
+    <!-- Controles inferiores -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Generar reporte"
-        android:layout_marginTop="6dp"
-        android:backgroundTint="#D32F2F"
-        android:textColor="@android:color/white"
-        android:textStyle="bold" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical|center_horizontal"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp">
 
+        <CheckBox
+            android:id="@+id/chkMA"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Filtro MA (N=9)"
+            android:textColor="#000000"
+            android:checked="false"
+            android:paddingEnd="16dp" />
+
+        <Button
+            android:id="@+id/btnReporte"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Generar reporte"
+            android:backgroundTint="#C62828"
+            android:textColor="#FFFFFF"
+            android:paddingLeft="16dp"
+            android:paddingRight="16dp"
+            android:elevation="2dp" />
+    </LinearLayout>
 </LinearLayout>
