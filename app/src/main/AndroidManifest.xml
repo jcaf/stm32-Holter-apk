@@ -17,13 +17,14 @@
 
 
     <activity android:name=".ReportActivity" />
-    
-    <activity
-        android:name=".DiagnosticoActivity"
-        android:exported="true"
-        android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-	
-    </activity>
+
+   <activity
+       android:name=".DiagnosticoActivity"
+       android:exported="true"
+       android:theme="@style/Theme.AppCompat.Light.NoActionBar"
+       android:configChanges="orientation|screenSize|keyboardHidden"
+       android:screenOrientation="fullSensor" />
+
 
     <activity
         android:name=".MainActivity"

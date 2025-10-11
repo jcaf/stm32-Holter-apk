@@ -1,128 +1,74 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/rootLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="16dp">
+    android:orientation="vertical"
+    android:padding="8dp"
+    android:background="#FFF5F5">
 
-    <LinearLayout
-        android:id="@+id/rootLayout"
-        android:orientation="vertical"
+    <!-- Información superior -->
+    <TextView
+        android:id="@+id/lblArchivo"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        android:text="Archivo: "
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:padding="4dp" />
 
-        <!-- Contenedor para la información y el botón de selección de archivo -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:baselineAligned="false">
+    <TextView
+        android:id="@+id/lblInfo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Información del archivo"
+        android:textSize="14sp"
+        android:textColor="#555"
+        android:padding="4dp" />
 
-            <!-- Columna de textos (ocupa la mayor parte del espacio) -->
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
+    <!-- CheckBox de suavizado -->
+    <CheckBox
+        android:id="@+id/chkMA"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Aplicar suavizado (media móvil)"
+        android:padding="4dp" />
 
-                <!-- Texto del archivo -->
-                <TextView
-                    android:id="@+id/lblArchivo"
-                    android:text="Archivo:"
-                    android:textSize="16sp"
-                    android:textStyle="bold"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
+    <!-- Contenedor desplazable para el gráfico -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:scrollbars="horizontal|vertical">
 
-                <!-- Información del archivo -->
-                <TextView
-                    android:id="@+id/lblInfo"
-                    android:text="Información del archivo"
-                    android:textSize="14sp"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp" />
-            </LinearLayout>
-
-            <!-- ✅ ÚNICO BOTÓN: Seleccionar archivo ECG -->
-            <Button
-                android:id="@+id/btnSeleccionarArchivo"
-                android:text="Seleccionar archivo ECG"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:paddingStart="12dp"
-                android:paddingEnd="12dp"
-                android:layout_marginStart="16dp"
-                android:minHeight="0dp"
-                android:minWidth="0dp" />
-
-        </LinearLayout>
-
-        <!-- Línea separadora visual -->
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:background="#CCCCCC"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="8dp" />
-
-        <!-- Checkbox suavizado -->
-        <CheckBox
-            android:id="@+id/chkMA"
-            android:text="Aplicar Suavizado (Media Móvil)"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" />
-
-        <!-- Contenedor para la gráfica del ECG -->
         <FrameLayout
-            android:id="@+id/graphContainer"
-            android:layout_width="match_parent"
-            android:layout_height="300dp"
-            android:background="#EEEEEE"
-            android:layout_marginTop="12dp"
-            android:layout_marginBottom="12dp">
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent">
 
-            <!-- Gráfico ECG -->
             <com.github.mikephil.charting.charts.LineChart
                 android:id="@+id/ecgChart"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:layout_gravity="center" />
-
-            <!-- Etiqueta eje Y (Amplitud) -->
-            <TextView
-                android:id="@+id/labelYAxis"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Amplitud (mV)"
-                android:textColor="#000000"
-                android:textSize="12sp"
-                android:rotation="-90"
-                android:layout_gravity="center_vertical|start"
-                android:layout_marginStart="4dp"
-                android:layout_marginTop="8dp" />
-
-            <!-- Etiqueta eje X (Tiempo) -->
-            <TextView
-                android:id="@+id/labelXAxis"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Tiempo (s)"
-                android:textColor="#000000"
-                android:textSize="12sp"
-                android:layout_gravity="bottom|center_horizontal"
-                android:layout_marginBottom="4dp" />
+                android:scrollbars="horizontal|vertical"
+                android:scrollbarStyle="insideOverlay"
+                android:scrollbarFadeDuration="0"
+                android:overScrollMode="never" />
 
         </FrameLayout>
+    </HorizontalScrollView>
 
 
-        <!-- Botón para ir al reporte -->
-        <Button
-            android:id="@+id/btnReporte"
-            android:text="Generar Reporte"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+    <!-- Botón inferior -->
+    <Button
+        android:id="@+id/btnReporte"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Generar reporte"
+        android:layout_marginTop="6dp"
+        android:backgroundTint="#D32F2F"
+        android:textColor="@android:color/white"
+        android:textStyle="bold" />
 
-    </LinearLayout>
-</ScrollView>
+</LinearLayout>

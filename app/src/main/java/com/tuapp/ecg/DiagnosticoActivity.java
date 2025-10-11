@@ -7,11 +7,8 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.os.Bundle;
 import android.text.format.DateFormat;
-import android.widget.Button;
-import android.widget.CheckBox;
-import android.widget.TextView;
+import android.widget.*;
 import androidx.appcompat.app.AppCompatActivity;
-import android.widget.Toast;
 
 import android.util.Log;
 import android.net.Uri;
@@ -25,15 +22,10 @@ import com.github.mikephil.charting.data.LineDataSet;
 import com.github.mikephil.charting.renderer.LineChartRenderer;
 import com.github.mikephil.charting.utils.ViewPortHandler;
 import com.github.mikephil.charting.interfaces.dataprovider.LineDataProvider;
-import com.github.mikephil.charting.components.XAxis;
-import com.github.mikephil.charting.components.YAxis;
-import com.github.mikephil.charting.components.AxisBase;
-import com.github.mikephil.charting.formatter.ValueFormatter;
 
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.FileOutputStream;
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -42,7 +34,7 @@ import java.util.*;
 
 public class DiagnosticoActivity extends AppCompatActivity {
 
-    public static final double FS = 500.0;  // Hz
+    public static final double FS = 500.0;  // Frecuencia de muestreo
     private static final int MA_N = 9;
     private static final double Y_MIN_MV = -1.5;
     private static final double Y_MAX_MV = +1.5;
@@ -77,12 +69,10 @@ public class DiagnosticoActivity extends AppCompatActivity {
 
         Log.d("ECG_DEBUG", "=== INICIANDO DiagnosticoActivity ===");
 
-//        Button btnSeleccionar = new Button(this);
-//        btnSeleccionar.setText("Seleccionar archivo ECG");
-//        ((android.widget.LinearLayout) findViewById(R.id.rootLayout)).addView(btnSeleccionar, 0);
-//
-        Button btnSeleccionar = findViewById(R.id.btnSeleccionarArchivo);
-
+        // === BOTÓN PARA SELECCIONAR ARCHIVO ECG ===
+        Button btnSeleccionar = new Button(this);
+        btnSeleccionar.setText("Seleccionar archivo ECG");
+        ((LinearLayout) findViewById(R.id.rootLayout)).addView(btnSeleccionar, 0);
 
         btnSeleccionar.setOnClickListener(v -> {
             Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
@@ -95,144 +85,114 @@ public class DiagnosticoActivity extends AppCompatActivity {
             if (signalRaw != null) plot(checked);
         });
 
-        btnReporte.setOnClickListener(v -> {
-            if (signalRaw == null) {
-                Toast.makeText(this, "Primero selecciona un archivo ECG.", Toast.LENGTH_SHORT).show();
-                return;
-            }
+        btnReporte.setOnClickListener(v -> generarReporte());
 
-            // === 1️⃣ Detectar picos R (nuevo detector robusto) ===
-            RPeakDetector.Result resultR = RPeakDetector.detectR(signalRaw, FS);
-
-            // === 2️⃣ Leer hora de inicio desde el archivo .TST (si existe) ===
-            String horaInicioTST = null;
-            try {
-                if (tstPath != null) {
-                    Log.d("ECG_DEBUG", "Leyendo hora desde: " + tstPath);
-                    try (BufferedReader br = new BufferedReader(new FileReader(tstPath))) {
-                        String line;
-                        while ((line = br.readLine()) != null) {
-                            if (line.startsWith("OPEN,")) {
-                                horaInicioTST = line.substring(5).trim(); // ej. "2025-10-06 10:27:11"
-                                Log.d("ECG_DEBUG", "Hora base detectada: " + horaInicioTST);
-                                break;
-                            }
-                        }
-                    }
-                } else {
-                    Log.d("ECG_DEBUG", "No existe archivo .TST asociado.");
-                }
-            } catch (Exception e) {
-                Log.e("ECG_DEBUG", "Error leyendo hora del .TST", e);
-            }
-
-            // === 3️⃣ Construir el reporte base ===
-            Metrics.Report rep = Metrics.buildReport(
-                    resultR,
-                    null,                                   // no usamos lista de timestamps explícita
-                    new File(ecgPath).getName(),            // nombre del archivo ECG
-                    durationSec,
-                    horaInicioTST                           // hora base tomada del .TST
-            );
-
-            // === 4️⃣ Si hay índice temporal (.TST), asociar timestamps reales ===
-            if (timeIndex != null) {
-                for (Metrics.Event e : rep.topHigh) {
-                    e.timestamp = timeIndex.sampleToDateTimeString(
-                            (int) Math.round(e.timeSec * FS)
-                    );
-                }
-                for (Metrics.Event e : rep.topLow) {
-                    e.timestamp = timeIndex.sampleToDateTimeString(
-                            (int) Math.round(e.timeSec * FS)
-                    );
-                }
-                rep.studyStart = timeIndex.startDisplay;
-                Log.d("ECG_DEBUG", "Hora de inicio del TST: " + rep.studyStart);
-            }
-
-            // === 5️⃣ Guardar temporalmente el reporte en la caché ===
-            String key = "rep_" + System.currentTimeMillis();
-            ReportCache.put(key, rep);
-
-            // === 6️⃣ Lanzar ReportActivity con la clave ===
-            Intent intent = new Intent(DiagnosticoActivity.this, ReportActivity.class);
-            intent.putExtra("reportKey", key);
-            startActivity(intent);
-        });
-
-
+        // === CONFIGURACIÓN VISUAL BASE ===
         setupChartAesthetics();
+
+        // === CONFIGURACIÓN DE INTERACCIÓN Y SCROLL ===
+        ecgChart.setTouchEnabled(true);
+        ecgChart.setDragEnabled(true);
+        ecgChart.setScaleEnabled(true);
+        ecgChart.setScaleXEnabled(true);
+        ecgChart.setScaleYEnabled(true);
+        ecgChart.setPinchZoom(true);
+        ecgChart.setDoubleTapToZoomEnabled(true);
+        ecgChart.setAutoScaleMinMaxEnabled(true);
+        ecgChart.setVerticalScrollBarEnabled(true);
+        ecgChart.setHorizontalScrollBarEnabled(true);
+        ecgChart.setScrollbarFadingEnabled(false);
+
+        // No hay ScrollView externo — el gráfico maneja sus propios gestos
+        ecgChart.setOnTouchListener((v, event) -> false);
     }
 
-    /** ============================
-     *   Apariencia inicial
-     *  ============================ */
+
+    /** Configuración visual del gráfico ECG */
     private void setupChartAesthetics() {
         ecgChart.setNoDataText("Selecciona un archivo ECG para visualizar.");
-        ecgChart.setBackgroundColor(Color.rgb(255, 245, 245)); // papel ECG
+        ecgChart.setBackgroundColor(Color.rgb(255, 245, 245)); // Fondo tipo papel ECG
         ecgChart.setDrawGridBackground(false);
         ecgChart.setTouchEnabled(true);
+        ecgChart.setDragEnabled(true);
+        ecgChart.setScaleEnabled(true);
+        ecgChart.setScaleXEnabled(true);   // 🔹 nuevo: zoom horizontal independiente
+        ecgChart.setScaleYEnabled(true);   // 🔹 nuevo: zoom vertical independiente
         ecgChart.setPinchZoom(true);
+        ecgChart.setDoubleTapToZoomEnabled(true);
+        ecgChart.setAutoScaleMinMaxEnabled(true);
+        ecgChart.setHorizontalScrollBarEnabled(true);
+        ecgChart.setVerticalScrollBarEnabled(true);
+        ecgChart.setScrollbarFadingEnabled(false);   // 🔹 nuevo
         ecgChart.getDescription().setEnabled(false);
 
-        // === EJE X: tiempo (s)
+
         XAxis xAxis = ecgChart.getXAxis();
         xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
-        xAxis.setDrawGridLines(true);
-        xAxis.setGranularity(0.04f);
-        xAxis.setGranularityEnabled(true);
-        xAxis.setTextColor(Color.BLACK);
-        xAxis.setAxisLineColor(Color.RED);
-        xAxis.setAxisLineWidth(1.5f);
-        xAxis.setValueFormatter(new ValueFormatter() {
-            @Override
-            public String getAxisLabel(float value, AxisBase axis) {
-                return String.format(Locale.US, "%.1f", value);
-            }
-        });
-        xAxis.setLabelCount(6, true);
-        xAxis.setDrawAxisLine(true);
-        xAxis.setDrawLabels(true);
+        xAxis.setTextColor(Color.DKGRAY);
+        xAxis.setDrawGridLines(false);
 
-// === EJE Y: amplitud (mV)
         YAxis leftAxis = ecgChart.getAxisLeft();
-        leftAxis.setDrawGridLines(true);
-        leftAxis.setGranularity(0.1f);
-        leftAxis.setGranularityEnabled(true);
-        leftAxis.setTextColor(Color.BLACK);
-        leftAxis.setAxisLineColor(Color.RED);
-        leftAxis.setAxisLineWidth(1.5f);
-        leftAxis.setAxisMinimum((float) Y_MIN_MV);
-        leftAxis.setAxisMaximum((float) Y_MAX_MV);
-        leftAxis.setValueFormatter(new ValueFormatter() {
-            @Override
-            public String getAxisLabel(float value, AxisBase axis) {
-                return String.format(Locale.US, "%.1f", value);
-            }
-        });
-        leftAxis.setLabelCount(6, true);
-        leftAxis.setDrawAxisLine(true);
-        leftAxis.setDrawLabels(true);
+        leftAxis.setTextColor(Color.DKGRAY);
+        leftAxis.setDrawGridLines(false);
+        leftAxis.setAxisMinimum((float) (Y_MIN_MV - 0.2f));  // margen inferior
+        leftAxis.setAxisMaximum((float) (Y_MAX_MV + 0.2f));  // margen superior
 
-// Desactiva eje derecho (no se usa en ECG)
         ecgChart.getAxisRight().setEnabled(false);
 
-
-        // === Render personalizado: papel ECG ===
         ecgChart.setRenderer(new ECGPaperRenderer(ecgChart, ecgChart.getAnimator(), ecgChart.getViewPortHandler()));
-
-        // Etiquetas descriptivas visibles
-        ecgChart.getDescription().setEnabled(true);
-        ecgChart.getDescription().setText("Tiempo (s)   |   Amplitud (mV)");
-        ecgChart.getDescription().setTextColor(Color.DKGRAY);
-        ecgChart.getDescription().setTextSize(12f);
     }
 
+    /** Proceso de reporte (igual que antes) */
+    private void generarReporte() {
+        if (signalRaw == null) {
+            Toast.makeText(this, "Primero selecciona un archivo ECG.", Toast.LENGTH_SHORT).show();
+            return;
+        }
 
-    /** ============================
-     *   Lectura del archivo ECG
-     *  ============================ */
+        RPeakDetector.Result resultR = RPeakDetector.detectR(signalRaw, FS);
+        String horaInicioTST = null;
+
+        try {
+            if (tstPath != null) {
+                Log.d("ECG_DEBUG", "Leyendo hora desde: " + tstPath);
+                try (BufferedReader br = new BufferedReader(new FileReader(tstPath))) {
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        if (line.startsWith("OPEN,")) {
+                            horaInicioTST = line.substring(5).trim();
+                            Log.d("ECG_DEBUG", "Hora base detectada: " + horaInicioTST);
+                            break;
+                        }
+                    }
+                }
+            } else {
+                Log.d("ECG_DEBUG", "No existe archivo .TST asociado.");
+            }
+        } catch (Exception e) {
+            Log.e("ECG_DEBUG", "Error leyendo hora del .TST", e);
+        }
+
+        Metrics.Report rep = Metrics.buildReport(resultR, null,
+                new File(ecgPath).getName(), durationSec, horaInicioTST);
+
+        if (timeIndex != null) {
+            for (Metrics.Event e : rep.topHigh)
+                e.timestamp = timeIndex.sampleToDateTimeString((int) Math.round(e.timeSec * FS));
+            for (Metrics.Event e : rep.topLow)
+                e.timestamp = timeIndex.sampleToDateTimeString((int) Math.round(e.timeSec * FS));
+            rep.studyStart = timeIndex.startDisplay;
+        }
+
+        String key = "rep_" + System.currentTimeMillis();
+        ReportCache.put(key, rep);
+
+        Intent intent = new Intent(this, ReportActivity.class);
+        intent.putExtra("reportKey", key);
+        startActivity(intent);
+    }
+
+    /** Lectura del archivo ECG y ploteo */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -251,16 +211,8 @@ public class DiagnosticoActivity extends AppCompatActivity {
                 }
                 ecgPath = tmpEcg.getAbsolutePath();
 
-                // Intentamos también localizar/copiar el .TST (si el usuario seleccionó desde una carpeta que permita)
                 File tstCandidate = new File(tmpEcg.getParent(), name.replace(".ECG", ".TST"));
-                if (tstCandidate.exists()) {
-                    tstPath = tstCandidate.getAbsolutePath();
-                    Log.d("ECG_DEBUG", "✅ .TST encontrado en caché: " + tstPath);
-                } else {
-                    // Si no está en caché, dejamos tstPath = null — tu flujo puede copiar .TST manualmente si procede.
-                    tstPath = null;
-                    Log.w("ECG_DEBUG", "⚠️ No se encontró archivo TST correspondiente");
-                }
+                tstPath = tstCandidate.exists() ? tstCandidate.getAbsolutePath() : null;
 
                 loadFileAndPlot(tmpEcg);
             } catch (Exception e) {
@@ -270,9 +222,6 @@ public class DiagnosticoActivity extends AppCompatActivity {
         }
     }
 
-    /** ============================
-     *   Conversión ADC → mV
-     *  ============================ */
     private void loadFileAndPlot(File ecgFile) throws Exception {
         Log.d("ECG_DEBUG", "Leyendo archivo ECG: " + ecgFile.getAbsolutePath());
         double[] adcRaw = ECGReader.readECGBigEndianUint16(ecgFile, 0);
@@ -283,16 +232,10 @@ public class DiagnosticoActivity extends AppCompatActivity {
         }
         durationSec = signalRaw.length / FS;
         signalMA = Filters.movingAverageCentered(signalRaw, MA_N);
-
-        // parsear .TST desde la copia en caché (si existe)
         timeIndex = (tstPath != null) ? TstIndex.parse(new File(tstPath)) : null;
-        if (timeIndex != null) Log.d("ECG_DEBUG", "Hora de inicio del TST: " + timeIndex.startDisplay);
         plot(false);
     }
 
-    /** ============================
-     *   Gráfico MPAndroidChart
-     *  ============================ */
     private void plot(boolean useMA) {
         double[] y = useMA ? signalMA : signalRaw;
         ArrayList<Entry> entries = new ArrayList<>();
@@ -306,7 +249,25 @@ public class DiagnosticoActivity extends AppCompatActivity {
         dataSet.setDrawValues(false);
 
         ecgChart.setData(new LineData(dataSet));
+
+// Configuración de scroll y zoom independientes
+        float totalSegundos = (float) (y.length / FS);
+        float ventanaInicial = 5f;   // muestra 5 s por defecto
+        ecgChart.setVisibleXRangeMaximum(ventanaInicial);
+        ecgChart.setVisibleXRangeMinimum(0.5f);
+
+// Asegura desplazamiento horizontal completo
+        ecgChart.moveViewToX(0f);
+
+// Permite escalar el eje Y libremente
+        ecgChart.getAxisLeft().setAxisMinimum((float) Y_MIN_MV);
+        ecgChart.getAxisLeft().setAxisMaximum((float) Y_MAX_MV);
+        ecgChart.setAutoScaleMinMaxEnabled(true);
+
+// Refresca el gráfico
         ecgChart.invalidate();
+
+
 
         lblInfo.setText(String.format(Locale.US,
                 "Fs=%.0f Hz · Duración=%.1fs · MA=%s",
@@ -330,96 +291,53 @@ public class DiagnosticoActivity extends AppCompatActivity {
         return (cut != -1) ? result.substring(cut + 1) : result;
     }
 
-    /**
-     * ============================
-     * Renderer personalizado tipo papel ECG
-     *  ============================
-     */
+    /** Renderizado con grilla ECG + etiqueta “Amplitud (mV)” */
     static class ECGPaperRenderer extends LineChartRenderer {
-        private final Paint thin, thick, bg;
-        private final float smallTime = 0.04f;  // 1 cuadro pequeño = 0.04 s
-        private final float bigTime   = 0.20f;  // 1 cuadro grande = 0.20 s
-        private final float smallMV   = 0.1f;   // 1 cuadro pequeño = 0.1 mV
-        private final float bigMV     = 0.5f;   // 1 cuadro grande = 0.5 mV
+        private final Paint thin, thick, bg, label;
+        private final float smallTime = 0.04f;
+        private final float smallMV = 0.1f;
 
         public ECGPaperRenderer(LineDataProvider chart,
                                 com.github.mikephil.charting.animation.ChartAnimator anim,
                                 ViewPortHandler viewPortHandler) {
             super(chart, anim, viewPortHandler);
-
-            thin = new Paint();
-            thin.setColor(Color.rgb(255, 210, 210)); // línea fina
-            thin.setStrokeWidth(1f);
-
-            thick = new Paint();
-            thick.setColor(Color.rgb(255, 120, 120)); // línea gruesa
-            thick.setStrokeWidth(2f);
-
-            bg = new Paint();
-            bg.setColor(Color.rgb(255, 245, 245)); // fondo
-            bg.setStyle(Paint.Style.FILL);
+            thin = new Paint(); thin.setColor(Color.rgb(255,210,210)); thin.setStrokeWidth(1f);
+            thick = new Paint(); thick.setColor(Color.rgb(255,120,120)); thick.setStrokeWidth(2f);
+            bg = new Paint(); bg.setColor(Color.rgb(255,245,245)); bg.setStyle(Paint.Style.FILL);
+            label = new Paint(); label.setColor(Color.DKGRAY); label.setTextSize(30f); label.setAntiAlias(true);
         }
 
         @Override
         public void drawData(Canvas c) {
-            // Fondo ECG
             c.drawRect(mViewPortHandler.getContentRect(), bg);
+            float xMin = mChart.getXChartMin(), xMax = mChart.getXChartMax();
+            float yMin = mChart.getYChartMin(), yMax = mChart.getYChartMax();
 
-            // CAST al LineChart para acceder a métodos visuales
-            LineChart chart = (LineChart) mChart;
-
-            // Rango visible actual
-            float xMin = chart.getLowestVisibleX();
-            float xMax = chart.getHighestVisibleX();
-
-            YAxis yAxis = chart.getAxisLeft();
-            float yMin = yAxis.mAxisMinimum;
-            float yMax = yAxis.mAxisMaximum;
-
-            final com.github.mikephil.charting.utils.Transformer trans =
-                    chart.getTransformer(YAxis.AxisDependency.LEFT);
-
-            float[] pts = new float[2];
-
-            // --- Cuadros verticales (tiempo) usando índice entero para evitar drift ---
-            float startX = (float) Math.floor(xMin / smallTime) * smallTime;
-            int nX = (int) Math.ceil((xMax - startX) / smallTime);
-            for (int i = 0; i <= nX; i++) {
-                float x = startX + i * smallTime;
-                pts[0] = x; pts[1] = yMin;               // transforma un punto cualquiera con ese X
-                trans.pointValuesToPixel(pts);
-                float xPix = pts[0];
-                boolean major = (i % 5 == 0);            // cada 5 cuadros pequeños = 0.20s
-                c.drawLine(xPix, mViewPortHandler.contentTop(), xPix, mViewPortHandler.contentBottom(),
-                        major ? thick : thin);
+            for (float x = xMin; x <= xMax; x += smallTime) {
+                float[] pts = new float[]{x, 0f};
+                mChart.getTransformer(YAxis.AxisDependency.LEFT).pointValuesToPixel(pts);
+                Paint p = (Math.abs((x / smallTime) % 5) < 0.001) ? thick : thin;
+                c.drawLine(pts[0], mViewPortHandler.contentTop(), pts[0], mViewPortHandler.contentBottom(), p);
+            }
+            for (float y = yMin; y <= yMax; y += smallMV) {
+                float[] pts = new float[]{0f, y};
+                mChart.getTransformer(YAxis.AxisDependency.LEFT).pointValuesToPixel(pts);
+                Paint p = (Math.abs((y / smallMV) % 5) < 0.001) ? thick : thin;
+                c.drawLine(mViewPortHandler.contentLeft(), pts[1], mViewPortHandler.contentRight(), pts[1], p);
             }
 
-            // --- Cuadros horizontales (amplitud) usando índice entero también ---
-            float startY = (float) Math.floor(yMin / smallMV) * smallMV;
-            int nY = (int) Math.ceil((yMax - startY) / smallMV);
-            for (int j = 0; j <= nY; j++) {
-                float y = startY + j * smallMV;
-                pts[0] = xMin; pts[1] = y;
-                trans.pointValuesToPixel(pts);
-                float yPix = pts[1];
-                boolean major = (j % 5 == 0);            // cada 5 cuadros pequeños = 0.5mV
-                c.drawLine(mViewPortHandler.contentLeft(), yPix, mViewPortHandler.contentRight(), yPix,
-                        major ? thick : thin);
-            }
+            // Etiqueta “Amplitud (mV)” fuera del grid, rotada
+            c.save();
+            c.rotate(-90, mViewPortHandler.contentLeft() - 50, mViewPortHandler.contentTop());
+            c.drawText("Amplitud (mV)", mViewPortHandler.contentLeft() - 70,
+                    mViewPortHandler.contentTop() + 100, label);
+            c.restore();
 
-            // Dibuja la señal ECG encima
             super.drawData(c);
         }
     }
 
-
-
-
-    /**
-     * ============================
-     * Parser .TST (timestamps)
-     * ============================
-     */
+    /** Parser del .TST */
     static class TstIndex {
         final TreeMap<Integer, Long> blockToMillis = new TreeMap<>();
         final int blockSize = 1024;
@@ -449,24 +367,41 @@ public class DiagnosticoActivity extends AppCompatActivity {
                         }
                     }
                 }
-            } catch (Exception ignored) {
-            }
+            } catch (Exception ignored) {}
             return ti;
         }
 
         String sampleToDateTimeString(int sampleIndex) {
             if (blockToMillis.isEmpty()) return null;
-            int blk = sampleIndex / blockSize;
+            int blk = (sampleIndex / blockSize) * blockSize;
             Map.Entry<Integer, Long> e = blockToMillis.floorEntry(blk);
             if (e == null) e = blockToMillis.firstEntry();
-            int blk0 = e.getKey();
-            long t0 = e.getValue();
-            double FS = DiagnosticoActivity.FS;
-            double seconds = (blk - blk0) * (blockSize / FS)
-                    + (sampleIndex - blk * blockSize) / FS;
-            Calendar cal = Calendar.getInstance();
-            cal.setTimeInMillis(t0 + (long) (seconds * 1000.0));
-            return DateFormat.format("yyyy-MM-dd HH:mm:ss", cal).toString();
+            long baseMillis = e.getValue();
+            int delta = sampleIndex - e.getKey();
+            long t = baseMillis + (long)((delta / FS) * 1000.0);
+            return DateFormat.format("HH:mm:ss", new Date(t)).toString();
         }
     }
-}
+    // === GUARDAR Y RESTAURAR POSICIÓN AL ROTAR ===
+    private float savedLowestX = 0f, savedScaleX = 1f, savedScaleY = 1f;
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (ecgChart != null) {
+            savedLowestX = ecgChart.getLowestVisibleX();
+            savedScaleX = ecgChart.getViewPortHandler().getScaleX();
+            savedScaleY = ecgChart.getViewPortHandler().getScaleY();
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (ecgChart != null && ecgChart.getData() != null) {
+            ecgChart.fitScreen();
+            ecgChart.zoom(savedScaleX, savedScaleY, 0f, 0f);
+            ecgChart.moveViewToX(savedLowestX);
+        }
+    }
+}  // <-- fin de la clase DiagnosticoActivity
