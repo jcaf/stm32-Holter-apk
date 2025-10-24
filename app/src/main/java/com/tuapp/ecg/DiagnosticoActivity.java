@@ -334,6 +334,12 @@ public class DiagnosticoActivity extends AppCompatActivity {
         }
 
         RPeakDetector.Result resultR = RPeakDetector.detectR(signalRaw, FS);
+        //+++++++++++++++++++++++++++++++
+        // === Integración para análisis clínico extendido (PVC, PAC, etc.) ===
+        // Si deseas que el análisis use la señal filtrada con media móvil:
+        resultR.signalFiltered = signalMA != null ? signalMA : signalRaw;
+        //+++++++++++++++++++++++++++++++
+
         String horaInicioTST = null;
 
         try {

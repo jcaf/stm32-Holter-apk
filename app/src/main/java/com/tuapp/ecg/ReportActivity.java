@@ -29,6 +29,8 @@ public class ReportActivity extends AppCompatActivity {
     Button btnGuardar;
     Metrics.Report rep;
 
+    TextView txtClinicos;
+
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -48,6 +50,8 @@ public class ReportActivity extends AppCompatActivity {
         txtEventosHigh = findViewById(R.id.txtEventosHigh);
         txtEventosLow  = findViewById(R.id.txtEventosLow);
         txtResumen     = findViewById(R.id.txtResumen);
+        txtClinicos = findViewById(R.id.txtClinicos);
+
         btnGuardar     = findViewById(R.id.btnGuardar);
 
         // Recuperar el reporte desde la caché temporal
@@ -73,6 +77,26 @@ public class ReportActivity extends AppCompatActivity {
         txtEventosHigh.setText(formatDetailedEvents(rep.topHigh, ">100 lpm"));
         txtEventosLow.setText(formatDetailedEvents(rep.topLow, "<60 lpm"));
         txtResumen.setText("Archivo: " + rep.fileName);
+        //+++++++++++++++++++++++++++
+        if (rep.extended != null) {
+            Metrics.ECGStats st = rep.extended;
+            String resumenClinico = String.format(Locale.US,
+                    "Promedio: %.1f lpm\nMínima: %.1f lpm\nMáxima: %.1f lpm\n\n" +
+                            "Taquicardias (>100): %d\nBradicardias (<60): %d\nPausas (>2s): %d\n\n" +
+                            "PVC detectadas: %d\nPAC detectadas: %d\n\n" +
+                            "Parejas (Couplets): %d\nRachas de 3 (Triplets): %d\n" +
+                            "Bigeminia: %d\nTrigeminia: %d",
+                    st.avgHR, st.minHR, st.maxHR,
+                    st.tachyCount, st.bradyCount, st.pauseCount,
+                    st.pvcCount, st.pacCount,
+                    st.coupletCount, st.tripletCount,
+                    st.bigeminyCount, st.trigeminyCount
+            );
+            txtClinicos.setText(resumenClinico);
+        } else {
+            txtClinicos.setText("(No se calcularon métricas clínicas extendidas)");
+        }
+        //+++++++++++++++++++++++++++
 
         btnGuardar.setOnClickListener(v -> confirmAndSave());
     }
@@ -129,6 +153,13 @@ public class ReportActivity extends AppCompatActivity {
             y += 18;
             y = drawMultiline(c, p, y, "Resultados:", edResultados);
             y += 18;
+            //++++++++++++++++++++++++
+            y = drawMultilineRaw(c, p, y, "Resultados clínicos automáticos:", txtClinicos.getText().toString());
+            y += 18;
+
+
+            //++++++++++++++++++++++++
+
             y = drawMultilineRaw(c, p, y, "Eventos (>100 lpm):", txtEventosHigh.getText().toString());
             y += 18;
             y = drawMultilineRaw(c, p, y, "Eventos (<60 lpm):", txtEventosLow.getText().toString());

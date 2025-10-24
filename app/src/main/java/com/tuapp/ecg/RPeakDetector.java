@@ -25,6 +25,26 @@ public class RPeakDetector {
         public int[] rIndex;   // índices de R en muestras
         public double[] rrSec; // intervalos RR (s)
         public double[] bpm;   // 60/RR
+
+        //nuevo para otras detecciones clinicas:
+        //+++++++++++++++++++++++++++++++++++
+        /**
+         * Devuelve los índices R en formato double[] (útil para análisis estadístico extendido)
+         */
+        public double[] rIndexDoubles() {
+            if (rIndex == null) return new double[0];
+            double[] out = new double[rIndex.length];
+            for (int i = 0; i < rIndex.length; i++) out[i] = (double) rIndex[i];
+            return out;
+        }
+
+        /**
+         * Señal filtrada de ECG para análisis de morfología (PVC/PAC)
+         * Nota: debes asignarla desde el pipeline de filtrado de tu DiagnosticoActivity.
+         * Si no existe aún, puedes dejarla null sin afectar la app.
+         */
+        public double[] signalFiltered = null;
+        //+++++++++++++++++++++++++++++++++++
     }
 
     public static Result detectR(double[] x, double fs) {
