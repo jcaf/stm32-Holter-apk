@@ -28,7 +28,6 @@ public class ReportActivity extends AppCompatActivity {
     TextView txtEventosHigh, txtEventosLow, txtResumen;
     Button btnGuardar;
     Metrics.Report rep;
-
     TextView txtClinicos;
 
     @Override
@@ -51,7 +50,6 @@ public class ReportActivity extends AppCompatActivity {
         txtEventosLow  = findViewById(R.id.txtEventosLow);
         txtResumen     = findViewById(R.id.txtResumen);
         txtClinicos = findViewById(R.id.txtClinicos);
-
         btnGuardar     = findViewById(R.id.btnGuardar);
 
         // Recuperar el reporte desde la caché temporal
@@ -76,16 +74,26 @@ public class ReportActivity extends AppCompatActivity {
         // ✅ Mostrar eventos con hora absoluta si existe
         txtEventosHigh.setText(formatDetailedEvents(rep.topHigh, ">100 lpm"));
         txtEventosLow.setText(formatDetailedEvents(rep.topLow, "<60 lpm"));
-        txtResumen.setText("Archivo: " + rep.fileName);
-        //+++++++++++++++++++++++++++
+
+        // Eliminamos el texto redundante de resumen en la vista Android
+        txtResumen.setText("");
+
+        // ✅ Resultados clínicos
         if (rep.extended != null) {
             Metrics.ECGStats st = rep.extended;
             String resumenClinico = String.format(Locale.US,
-                    "Promedio: %.1f lpm\nMínima: %.1f lpm\nMáxima: %.1f lpm\n\n" +
-                            "Taquicardias (>100): %d\nBradicardias (<60): %d\nPausas (>2s): %d\n\n" +
-                            "PVC detectadas: %d\nPAC detectadas: %d\n\n" +
-                            "Parejas (Couplets): %d\nRachas de 3 (Triplets): %d\n" +
-                            "Bigeminia: %d\nTrigeminia: %d",
+                    "Frecuencia media: %.1f LPM\n" +
+                            "Frecuencia mínima: %.1f LPM\n" +
+                            "Frecuencia máxima: %.1f LPM\n" +
+                            "Episodios de taquicardia (>100 LPM): %d\n" +
+                            "Episodios de bradicardia (<60 LPM): %d\n" +
+                            "Pausas (>2s): %d\n" +
+                            "PVC detectadas: %d\n" +
+                            "PAC detectadas: %d\n" +
+                            "Parejas ventriculares: %d\n" +
+                            "Rachas de 3 latidos (triple): %d\n" +
+                            "Bigeminia: %d\n" +
+                            "Trigeminia: %d",
                     st.avgHR, st.minHR, st.maxHR,
                     st.tachyCount, st.bradyCount, st.pauseCount,
                     st.pvcCount, st.pacCount,
@@ -96,21 +104,18 @@ public class ReportActivity extends AppCompatActivity {
         } else {
             txtClinicos.setText("(No se calcularon métricas clínicas extendidas)");
         }
-        //+++++++++++++++++++++++++++
 
         btnGuardar.setOnClickListener(v -> confirmAndSave());
     }
 
-    /** ✅ Muestra eventos en formato detallado con hora o segundos */
+    /** ✅ Muestra eventos en formato detallado */
     private String formatDetailedEvents(List<Metrics.Event> list, String title) {
         StringBuilder sb = new StringBuilder();
-        sb.append("\n").append(title).append("\n");
-
+        sb.append(title).append("\n");
         if (list == null || list.isEmpty()) {
             sb.append("(sin eventos)\n");
             return sb.toString();
         }
-
         for (int i = 0; i < list.size(); i++) {
             Metrics.Event e = list.get(i);
             String tiempo = (e.timestamp != null && !e.timestamp.isEmpty())
@@ -139,7 +144,19 @@ public class ReportActivity extends AppCompatActivity {
             p.setTextSize(12f);
             p.setColor(Color.BLACK);
 
-            int y = 40;
+            int y = 50;
+
+            // === Encabezado centrado ===
+            android.graphics.Paint title = new android.graphics.Paint(p);
+            title.setTextSize(16f);
+            title.setFakeBoldText(true);
+            title.setTextAlign(android.graphics.Paint.Align.CENTER);
+            c.drawText("REPORTE CLÍNICO - MONITOREO ECG", info.getPageWidth() / 2f, y, title);
+            y += 25;
+            c.drawText("Derivación: I (config. Einthoven modificada)", info.getPageWidth() / 2f, y, title);
+            y += 40;
+
+            // === Datos del paciente ===
             y = drawLine(c, p, y, "Médico: ", edMedico);
             y = drawLine(c, p, y, "Lugar/Centro de salud: ", edLugar);
             y = drawLine(c, p, y, "Fecha: ", edFecha);
@@ -148,29 +165,27 @@ public class ReportActivity extends AppCompatActivity {
             y = drawLine(c, p, y, "DNI: ", edDni);
             y = drawLine(c, p, y, "Edad: ", edEdad);
             y = drawLine(c, p, y, "Sexo: ", edSexo);
-            y += 18;
+            y += 20;
             y = drawMultiline(c, p, y, "Antecedentes personales:", edAntecedentes);
-            y += 18;
-            y = drawMultiline(c, p, y, "Resultados:", edResultados);
-            y += 18;
-            //++++++++++++++++++++++++
-            y = drawMultilineRaw(c, p, y, "Resultados clínicos automáticos:", txtClinicos.getText().toString());
-            y += 18;
+            y += 25;
 
+            // === Resultados clínicos ===
+            y = drawMultilineRaw(c, p, y, "", txtClinicos.getText().toString());
+            y += 25;
 
-            //++++++++++++++++++++++++
-
+            // === Eventos ===
             y = drawMultilineRaw(c, p, y, "Eventos (>100 lpm):", txtEventosHigh.getText().toString());
-            y += 18;
+            y += 20;
             y = drawMultilineRaw(c, p, y, "Eventos (<60 lpm):", txtEventosLow.getText().toString());
-            y += 18;
+            y += 20;
+
+            // === Recomendaciones ===
             y = drawMultiline(c, p, y, "Recomendaciones:", edRecomendaciones);
 
             pdf.finishPage(page);
 
             String name = "ReporteECG_" +
                     new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ".pdf";
-
             Uri uri = createDownloadUri(name);
 
             try (OutputStream os = getContentResolver().openOutputStream(uri)) {
@@ -182,12 +197,64 @@ public class ReportActivity extends AppCompatActivity {
             pdf.close();
             Toast.makeText(this, "✅ PDF guardado en Descargas: " + name, Toast.LENGTH_LONG).show();
 
+            // === Eliminación opcional de archivos ECG/TST ===
+            final boolean AUTO_DELETE_AFTER_PDF = true; // <— Activa o desactiva la función globalmente
+
+            if (AUTO_DELETE_AFTER_PDF) {
+                new androidx.appcompat.app.AlertDialog.Builder(this)
+                        .setTitle("Eliminar archivos originales")
+                        .setMessage("¿Desea eliminar los archivos .ECG y .TST después de guardar el reporte en PDF?")
+                        .setPositiveButton("Sí", (dialog, which) -> {
+                            try {
+                                int deleted = 0;
+
+                                // Archivos originales pasados por Intent
+                                String ecgPath = getIntent().getStringExtra("ecgPath");
+                                String tstPath = getIntent().getStringExtra("tstPath");
+                                if (ecgPath != null) {
+                                    File fEcg = new File(ecgPath);
+                                    if (fEcg.exists() && fEcg.delete()) deleted++;
+                                }
+                                if (tstPath != null) {
+                                    File fTst = new File(tstPath);
+                                    if (fTst.exists() && fTst.delete()) deleted++;
+                                }
+
+                                // Archivos en caché
+                                File cacheDir = getCacheDir();
+                                if (cacheDir != null && cacheDir.isDirectory()) {
+                                    File[] files = cacheDir.listFiles();
+                                    if (files != null) {
+                                        for (File f : files) {
+                                            String n = f.getName().toUpperCase(Locale.US);
+                                            if (n.endsWith(".ECG") || n.endsWith(".TST")) {
+                                                if (f.delete()) deleted++;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Toast.makeText(this,
+                                        "🗑 Archivos .ECG/.TST eliminados (" + deleted + ")", Toast.LENGTH_LONG).show();
+                                Log.i("ECG_DEBUG", "Auto-delete tras PDF: eliminados " + deleted + " archivos.");
+
+                            } catch (Exception e) {
+                                Log.e("ECG_DEBUG", "Error eliminando archivos ECG/TST", e);
+                                Toast.makeText(this, "⚠️ Error al eliminar archivos", Toast.LENGTH_SHORT).show();
+                            }
+                        })
+                        .setNegativeButton("No", (dialog, which) ->
+                                Toast.makeText(this, "Archivos conservados.", Toast.LENGTH_SHORT).show())
+                        .show();
+            }
+
         } catch (Exception ex) {
             Log.e("ECG_DEBUG", "Error al guardar PDF", ex);
             Toast.makeText(this, "Error al guardar PDF: " + ex.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
+    // === Utilidades de dibujo en PDF ===
     private int drawLine(android.graphics.Canvas c, android.graphics.Paint p, int y, String label, EditText ed) {
         c.drawText(label + safe(ed.getText()), 40, y, p);
         return y + 18;
@@ -204,8 +271,10 @@ public class ReportActivity extends AppCompatActivity {
     }
 
     private int drawMultilineRaw(android.graphics.Canvas c, android.graphics.Paint p, int y, String label, String content) {
-        c.drawText(label, 40, y, p);
-        y += 18;
+        if (label != null && !label.isEmpty()) {
+            c.drawText(label, 40, y, p);
+            y += 18;
+        }
         for (String ln : content.split("\n")) {
             c.drawText(ln, 60, y, p);
             y += 16;
@@ -217,7 +286,6 @@ public class ReportActivity extends AppCompatActivity {
         return (e == null ? "" : e.toString());
     }
 
-    /** ✅ Crea el URI del PDF en la carpeta Descargas */
     private Uri createDownloadUri(String displayName) throws Exception {
         ContentValues cv = new ContentValues();
         cv.put(MediaStore.MediaColumns.DISPLAY_NAME, displayName);

@@ -45,6 +45,9 @@ import java.util.TreeMap;
 
 public class DiagnosticoActivity extends AppCompatActivity {
 
+    // ==== OPCIÓN DE LIMPIEZA AUTOMÁTICA ====
+    private static final boolean AUTO_DELETE_AFTER_REPORT = true; // <--- cambia a false para desactivar
+
     // ==== CONSTANTES ====
     public static final double FS = 500.0;
     private static final int MA_N = 9;
@@ -374,7 +377,13 @@ public class DiagnosticoActivity extends AppCompatActivity {
 
         Intent intent = new Intent(this, ReportActivity.class);
         intent.putExtra("reportKey", key);
+
+        intent.putExtra("ecgPath", ecgPath);
+        intent.putExtra("tstPath", tstPath);
         startActivity(intent);
+
+
+
     }
 
     // === Utilidad ===
