@@ -205,6 +205,58 @@ public class ReportActivity extends AppCompatActivity {
             Toast.makeText(this, "Error al guardar PDF: " + ex.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
+    private Uri normalizeUri(Uri uri) {
+        try {
+            String s = uri.toString();
+            if (s.contains("raw%3A") || s.contains("raw:")) {
+                s = s.replace("raw%3A", "").replace("raw:", "");
+                return Uri.parse(Uri.decode(s));
+            }
+        } catch (Exception e) {
+            Log.w("ECG_DEBUG", "normalizeUri: fallo al normalizar URI", e);
+        }
+        return uri;
+    }
+    private boolean eliminarPorSAFUniversal(Uri uri) {
+        try {
+            boolean ok = false;
+            DocumentFile doc = DocumentFile.fromSingleUri(this, uri);
+
+            if (doc != null && doc.canWrite() && doc.exists()) {
+                ok = doc.delete();
+                Log.d("ECG_DEBUG", "Eliminado por SAF directo=" + ok + " → " + uri);
+            }
+
+            if (!ok) {
+                // Fallback universal (ruta física)
+                String decoded = Uri.decode(uri.toString());
+                decoded = decoded
+                        .replace("content://com.android.providers.downloads.documents/document/raw%3A", "")
+                        .replace("content://com.android.providers.downloads.documents/document/", "")
+                        .replace("file://", "");
+
+                File f = new File(decoded);
+                if (f.exists()) {
+                    Log.d("ECG_DEBUG", "Intentando eliminar por ruta directa: " + f.getAbsolutePath());
+                    ok = f.delete();
+
+                    if (!ok) {
+                        Process p = Runtime.getRuntime().exec("rm -f \"" + f.getAbsolutePath() + "\"");
+                        p.waitFor();
+                        ok = !f.exists();
+                    }
+                } else {
+                    Log.w("ECG_DEBUG", "Archivo no encontrado para eliminación directa: " + decoded);
+                }
+            }
+
+            Log.d("ECG_DEBUG", "Eliminado universal=" + ok + " → " + uri);
+            return ok;
+        } catch (Exception e) {
+            Log.e("ECG_DEBUG", "Error en eliminarPorSAFUniversal: " + uri, e);
+            return false;
+        }
+    }
 
     private void promptFileDeletion() {
         new AlertDialog.Builder(this)
@@ -219,55 +271,28 @@ public class ReportActivity extends AppCompatActivity {
                     if (deleteFileUniversal(ecgPath)) deleted++;
                     if (deleteFileUniversal(tstPath)) deleted++;
 
-                    // 🔹 Eliminar también desde el URI SAF (cualquier ubicación)
+                    // 🔹 Intentar eliminar el ECG mediante SAF (universal)
                     if (ecgUriStr != null) {
                         try {
-                            Uri uri = normalizeUri(Uri.parse(ecgUriStr));
-                            Log.d("ECG_DEBUG", "Intentando eliminar con SAF: " + uri);
-
-                            boolean ok = false;
-                            DocumentFile doc = DocumentFile.fromSingleUri(this, uri);
-                            if (doc != null && doc.canWrite() && doc.exists()) {
-                                ok = doc.delete();
-                                Log.d("ECG_DEBUG", "Eliminado por SAF directo=" + ok + " → " + uri);
-                            }
-
-                            if (!ok) {
-                                // 🔸 Fallback: intentar eliminar por ruta física
-                                String decoded = Uri.decode(uri.toString());
-
-                                // Eliminar prefijos conocidos de SAF
-                                decoded = decoded
-                                        .replace("content://com.android.providers.downloads.documents/document/raw%3A", "")
-                                        .replace("content://com.android.providers.downloads.documents/document/", "")
-                                        .replace("file://", "");
-
-                                File f = new File(decoded);
-                                if (f.exists()) {
-                                    Log.d("ECG_DEBUG", "Intentando eliminar por ruta directa: " + f.getAbsolutePath());
-                                    ok = f.delete();
-
-                                    // Si aún no se elimina, forzar con comando rm
-                                    if (!ok) {
-                                        Process p = Runtime.getRuntime().exec("rm -f \"" + f.getAbsolutePath() + "\"");
-                                        p.waitFor();
-                                        ok = !f.exists();
-                                    }
-                                } else {
-                                    Log.w("ECG_DEBUG", "Archivo no encontrado para eliminación directa: " + decoded);
-                                }
-                            }
-
-                            Log.d("ECG_DEBUG", "Eliminado universal=" + ok + " → " + uri);
+                            Uri ecgUri = normalizeUri(Uri.parse(ecgUriStr));
+                            Log.d("ECG_DEBUG", "Intentando eliminar ECG con SAF: " + ecgUri);
+                            boolean ok = eliminarPorSAFUniversal(ecgUri);
                             if (ok) deleted++;
-
                         } catch (Exception e) {
-                            Log.e("ECG_DEBUG", "Error al eliminar con SAF: " + ecgUriStr, e);
+                            Log.e("ECG_DEBUG", "Error al eliminar ECG con SAF", e);
+                        }
+
+                        // 🔹 Intentar también eliminar el TST correspondiente, si existe
+                        try {
+                            String tstName = new File(Uri.decode(ecgUriStr)).getName().replace(".ECG", ".TST");
+                            Uri tstUri = Uri.parse(ecgUriStr.replace(".ECG", ".TST"));
+                            Log.d("ECG_DEBUG", "Intentando eliminar TST con SAF: " + tstUri);
+                            boolean okTst = eliminarPorSAFUniversal(normalizeUri(tstUri));
+                            if (okTst) deleted++;
+                        } catch (Exception e) {
+                            Log.e("ECG_DEBUG", "Error al eliminar TST con SAF", e);
                         }
                     }
-
-
-
 
                     Toast.makeText(this, "🗑 Archivos eliminados (" + deleted + ")", Toast.LENGTH_LONG).show();
                 })
@@ -275,18 +300,8 @@ public class ReportActivity extends AppCompatActivity {
                         Toast.makeText(this, "Archivos conservados.", Toast.LENGTH_SHORT).show())
                 .show();
     }
-    private Uri normalizeUri(Uri uri) {
-        try {
-            String s = uri.toString();
-            if (s.contains("raw%3A") || s.contains("raw:")) {
-                s = s.replace("raw%3A", "").replace("raw:", "");
-                return Uri.parse(Uri.decode(s));
-            }
-        } catch (Exception e) {
-            Log.w("ECG_DEBUG", "normalizeUri: fallo al normalizar URI", e);
-        }
-        return uri;
-    }
+
+
 
 
     private boolean deleteFileUniversal(String path) {
