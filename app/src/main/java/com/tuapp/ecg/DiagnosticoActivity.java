@@ -45,10 +45,6 @@ import java.util.TreeMap;
 
 public class DiagnosticoActivity extends AppCompatActivity {
 
-    // ==== OPCIÓN DE LIMPIEZA AUTOMÁTICA ====
-    private static final boolean AUTO_DELETE_AFTER_REPORT = true; // <--- cambia a false para desactivar
-
-    // ==== CONSTANTES ====
     public static final double FS = 500.0;
     private static final int MA_N = 9;
     private static final double Y_MIN_MV = -1.5;
@@ -64,11 +60,13 @@ public class DiagnosticoActivity extends AppCompatActivity {
 
     // ==== DATA ====
     String ecgPath, tstPath;
+
+    String ecgUriStr; // ✅ NUEVO: URI original del archivo ECG
     double[] signalRaw, signalMA;
     double durationSec;
     TstIndex timeIndex;
 
-    // ==== ESTADO ====
+    // ==== ESTADO SCROLL/ZOOM ====
     private float savedLowestX = 0f, savedScaleX = 1f, savedScaleY = 1f;
     private boolean userScrollingBar = false;
     private boolean isAdjustingZoom = false;
@@ -94,16 +92,21 @@ public class DiagnosticoActivity extends AppCompatActivity {
 
         Log.d("ECG_DEBUG", "=== INICIANDO DiagnosticoActivity ===");
 
-        // Botón para seleccionar ECG (no interfiere con tu UI actual)
+        // Botón “Seleccionar archivo ECG” dinámico (esto ya lo tenías funcionando)
         LinearLayout root = findViewById(R.id.rootLayout);
         if (root != null) {
             Button btnSeleccionar = new Button(this);
             btnSeleccionar.setText("Seleccionar archivo ECG");
             root.addView(btnSeleccionar, 0);
+
             btnSeleccionar.setOnClickListener(v -> {
                 Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
                 intent.setType("*/*");
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
+                // ✅ Flags para lectura, escritura y persistencia de permisos
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                        | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
                 startActivityForResult(Intent.createChooser(intent, "Selecciona archivo .ECG"), 100);
             });
         }
@@ -115,11 +118,11 @@ public class DiagnosticoActivity extends AppCompatActivity {
         btnReporte.setOnClickListener(v -> generarReporte());
 
         setupChartAesthetics();
-        setupScrollBar();
+        setupScrollBar(); // <<<< FALTABA ESTO
         setupZoomBar();
     }
 
-    // === CONFIGURACIÓN DE CHART Y GESTOS ===
+    // === CONFIGURACIÓN VISUAL DEL CHART ===
     private void setupChartAesthetics() {
         ecgChart.setNoDataText("Selecciona un archivo ECG para visualizar.");
         ecgChart.setBackgroundColor(Color.rgb(255, 245, 245));
@@ -145,9 +148,14 @@ public class DiagnosticoActivity extends AppCompatActivity {
         leftAxis.setAxisMaximum((float)(Y_MAX_MV + 0.2f));
         ecgChart.getAxisRight().setEnabled(false);
 
-        ecgChart.setRenderer(new ECGPaperRenderer(ecgChart, ecgChart.getAnimator(), ecgChart.getViewPortHandler()));
+        // renderer de papel ECG (grilla roja fina)
+        ecgChart.setRenderer(new ECGPaperRenderer(
+                ecgChart,
+                ecgChart.getAnimator(),
+                ecgChart.getViewPortHandler()
+        ));
 
-        // Sincroniza desplazamiento táctil con la barra de scroll
+        // === SINCRONIZAR GESTO DEL CHART -> SCROLLBAR ===
         ecgChart.setOnChartGestureListener(new OnChartGestureListener() {
             @Override public void onChartGestureStart(android.view.MotionEvent me, ChartTouchListener.ChartGesture g) {}
             @Override public void onChartGestureEnd(android.view.MotionEvent me, ChartTouchListener.ChartGesture g) {}
@@ -156,6 +164,7 @@ public class DiagnosticoActivity extends AppCompatActivity {
             @Override public void onChartSingleTapped(android.view.MotionEvent me) {}
             @Override public void onChartFling(android.view.MotionEvent me1, android.view.MotionEvent me2, float vx, float vy) {}
             @Override public void onChartScale(android.view.MotionEvent me, float sx, float sy) {}
+
             @Override
             public void onChartTranslate(android.view.MotionEvent me, float dX, float dY) {
                 if (!userScrollingBar && !isAdjustingZoom && ecgChart.getData() != null && scrollBar != null) {
@@ -177,15 +186,19 @@ public class DiagnosticoActivity extends AppCompatActivity {
     // === SCROLL BAR (gris) ===
     private void setupScrollBar() {
         if (scrollBar == null) return;
+
         scrollBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onStartTrackingTouch(SeekBar s) { userScrollingBar = true; }
             @Override public void onStopTrackingTouch(SeekBar s) { userScrollingBar = false; }
+
             @Override
             public void onProgressChanged(SeekBar s, int progress, boolean fromUser) {
                 if (!fromUser || ecgChart.getData() == null) return;
-                float totalRange = ecgChart.getData().getXMax();
-                float visibleRange = ecgChart.getVisibleXRange();
+
+                float totalRange = ecgChart.getData().getXMax();    // eje X total (segundos)
+                float visibleRange = ecgChart.getVisibleXRange();   // ventana visible actual
                 float denom = (totalRange - visibleRange);
+
                 if (denom > 0) {
                     float targetX = (progress / 100f) * denom;
                     ecgChart.moveViewToX(targetX);
@@ -210,35 +223,34 @@ public class DiagnosticoActivity extends AppCompatActivity {
 
                 isAdjustingZoom = true;
 
-                // 1) Calcular ventana deseada (en segundos)
+                // Ventana horizontal deseada en segundos
                 float zoomMin = 1f;   // más cerca: 1 s visibles
                 float zoomMax = 10f;  // más lejos: 10 s visibles
                 float rango   = zoomMax - zoomMin;
                 float ventana = zoomMax - (progress / 100f) * rango; // [1..10] s
 
-                // Limitar por el total disponible
-                float totalRange = ecgChart.getData().getXMax(); // suponiendo que X arranca en 0
+                float totalRange = ecgChart.getData().getXMax(); // suponemos que X arranca en 0
                 if (ventana > totalRange) ventana = Math.max(0.5f, totalRange);
-                ventana = Math.max(0.5f, ventana); // nunca menor a 0.5 s
+                ventana = Math.max(0.5f, ventana); // nunca menor 0.5s
 
-                // 2) Obtener escala actual y deseada para eje X
+                // Escala actual vs. deseada
                 float currentVisible = ecgChart.getVisibleXRange();
-                if (currentVisible <= 0f) currentVisible = ventana; // fallback
+                if (currentVisible <= 0f) currentVisible = ventana;
                 float currentScaleX = ecgChart.getViewPortHandler().getScaleX();
                 if (currentScaleX <= 0f) currentScaleX = totalRange / currentVisible;
-
                 float desiredScaleX = (ventana > 0f) ? (totalRange / ventana) : currentScaleX;
 
-                // 3) Calcular factor relativo y aplicar zoom SOLO en X
                 float factorX = desiredScaleX / currentScaleX;
                 if (factorX > 0f && !Float.isInfinite(factorX) && !Float.isNaN(factorX)) {
                     ViewPortHandler h = ecgChart.getViewPortHandler();
+                    // versión compatible (tu error contentCenter() venía de aquí)
                     float px = h.contentLeft() + h.contentWidth() / 2f;
                     float py = h.contentTop() + h.contentHeight() / 2f;
+
                     ecgChart.zoom(factorX, 1f, px, py);
                 }
 
-                // 4) Re-sincronizar barra de scroll con la nueva ventana
+                // re-sincroniza scrollBar visualmente
                 float visibleMin = ecgChart.getLowestVisibleX();
                 float visibleRange = ecgChart.getVisibleXRange();
                 float denom = (totalRange - visibleRange);
@@ -257,16 +269,33 @@ public class DiagnosticoActivity extends AppCompatActivity {
         });
     }
 
-    // === Lectura del archivo ECG + graficado ===
+    // === LECTURA ARCHIVO ECG + GRAFICADO ===
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == 100 && resultCode == RESULT_OK && data != null) {
             Uri uri = data.getData();
             if (uri == null) return;
+
             try {
+                // ✅ Otorgar permisos persistentes (lectura + escritura)
+                final int takeFlags = data.getFlags()
+                        & (Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                try {
+                    getContentResolver().takePersistableUriPermission(uri, takeFlags);
+                    Log.d("ECG_DEBUG", "Permiso persistente otorgado para URI: " + uri);
+                } catch (Exception e) {
+                    Log.e("ECG_DEBUG", "No se pudo otorgar permiso persistente para URI", e);
+                }
+
+                // ✅ Guardar también el URI original en String
+                ecgUriStr = uri.toString();
+
+                // === Copiar temporalmente a caché interno (para graficar) ===
                 String name = getFileNameFromUri(uri);
                 lblArchivo.setText("Archivo: " + name);
+
                 File tmpEcg = new File(getCacheDir(), name);
                 try (InputStream in = getContentResolver().openInputStream(uri);
                      OutputStream out = new FileOutputStream(tmpEcg)) {
@@ -274,12 +303,14 @@ public class DiagnosticoActivity extends AppCompatActivity {
                     int n;
                     while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
                 }
+
                 ecgPath = tmpEcg.getAbsolutePath();
 
                 File tstCandidate = new File(tmpEcg.getParent(), name.replace(".ECG", ".TST"));
                 tstPath = tstCandidate.exists() ? tstCandidate.getAbsolutePath() : null;
 
                 loadFileAndPlot(tmpEcg);
+
             } catch (Exception e) {
                 lblArchivo.setText("❌ Error cargando el archivo ECG");
                 Log.e("ECG_DEBUG", "Error cargando ECG", e);
@@ -287,26 +318,42 @@ public class DiagnosticoActivity extends AppCompatActivity {
         }
     }
 
+
     private void loadFileAndPlot(File ecgFile) throws Exception {
         Log.d("ECG_DEBUG", "Leyendo archivo ECG: " + ecgFile.getAbsolutePath());
+
         double[] adcRaw = ECGReader.readECGBigEndianUint16(ecgFile, 0);
         signalRaw = new double[adcRaw.length];
         for (int i = 0; i < adcRaw.length; i++) {
             double val = (adcRaw[i] - ADC_MID) / 2048.0;
-            signalRaw[i] = val * 1.5;
+            signalRaw[i] = val * 1.5; // tu escala mV
         }
+
         durationSec = signalRaw.length / FS;
         signalMA = Filters.movingAverageCentered(signalRaw, MA_N);
+
         timeIndex = (tstPath != null) ? TstIndex.parse(new File(tstPath)) : null;
+
         plot(false);
+        // set barras iniciales
+        if (scrollBar != null) scrollBar.setProgress(0);
+        if (zoomBar   != null) zoomBar.setProgress(50);
+
+        lblInfo.setText(String.format(Locale.US,
+                "Fs=%.0f Hz · Duración=%.1fs · MA=%s",
+                FS, durationSec, "OFF"));
     }
 
     // === Ploteo ===
     private void plot(boolean useMA) {
         double[] y = useMA ? signalMA : signalRaw;
         ArrayList<Entry> entries = new ArrayList<>();
-        float t = 0f, dt = (float)(1.0 / FS);
-        for (double v : y) { entries.add(new Entry(t, (float)v)); t += dt; }
+        float t = 0f;
+        float dt = (float)(1.0 / FS);
+        for (double v : y) {
+            entries.add(new Entry(t, (float)v));
+            t += dt;
+        }
 
         LineDataSet dataSet = new LineDataSet(entries, useMA ? "ECG (MA=9)" : "ECG crudo");
         dataSet.setColor(Color.BLACK);
@@ -316,20 +363,17 @@ public class DiagnosticoActivity extends AppCompatActivity {
 
         ecgChart.setData(new LineData(dataSet));
 
-        // Ventana inicial
         ecgChart.setVisibleXRangeMaximum(5f);
         ecgChart.setVisibleXRangeMinimum(0.5f);
         ecgChart.moveViewToX(0f);
         ecgChart.invalidate();
 
-        if (scrollBar != null) scrollBar.setProgress(0);
-        if (zoomBar != null)  zoomBar.setProgress(50);
-
-        lblInfo.setText(String.format(Locale.US, "Fs=%.0f Hz · Duración=%.1fs · MA=%s",
+        lblInfo.setText(String.format(Locale.US,
+                "Fs=%.0f Hz · Duración=%.1fs · MA=%s",
                 FS, durationSec, useMA ? "ON (N=9)" : "OFF"));
     }
 
-    // === Generación de reporte (restaurado) ===
+    // === Generación de reporte y salto a ReportActivity ===
     private void generarReporte() {
         if (signalRaw == null) {
             Toast.makeText(this, "Primero selecciona un archivo ECG.", Toast.LENGTH_SHORT).show();
@@ -337,12 +381,6 @@ public class DiagnosticoActivity extends AppCompatActivity {
         }
 
         RPeakDetector.Result resultR = RPeakDetector.detectR(signalRaw, FS);
-        //+++++++++++++++++++++++++++++++
-        // === Integración para análisis clínico extendido (PVC, PAC, etc.) ===
-        // Si deseas que el análisis use la señal filtrada con media móvil:
-        resultR.signalFiltered = signalMA != null ? signalMA : signalRaw;
-        //+++++++++++++++++++++++++++++++
-
         String horaInicioTST = null;
 
         try {
@@ -351,7 +389,15 @@ public class DiagnosticoActivity extends AppCompatActivity {
                     String line;
                     while ((line = br.readLine()) != null) {
                         if (line.startsWith("OPEN,")) {
-                            horaInicioTST = line.substring(5).trim();
+                            String ts = line.substring(5).trim();
+                            // Intentar parse para validar formato
+                            try {
+                                SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
+                                Date d = fmt.parse(ts);
+                                if (d != null) {
+                                    horaInicioTST = ts;
+                                }
+                            } catch (Exception ignored) {}
                             break;
                         }
                     }
@@ -361,29 +407,37 @@ public class DiagnosticoActivity extends AppCompatActivity {
             Log.e("ECG_DEBUG", "Error leyendo hora del .TST", e);
         }
 
-        Metrics.Report rep = Metrics.buildReport(resultR, null,
-                new File(ecgPath).getName(), durationSec, horaInicioTST);
+        // buildReport ahora calcula rep.extended internamente
+        Metrics.Report rep = Metrics.buildReport(
+                resultR,
+                signalRaw, // se usa para las métricas extendidas
+                new File(ecgPath).getName(),
+                durationSec,
+                horaInicioTST
+        );
 
+        // Ajustar timestamps absolutos usando TstIndex, si lo tenemos
         if (timeIndex != null) {
-            for (Metrics.Event e : rep.topHigh)
+            for (Metrics.Event e : rep.topHigh) {
                 e.timestamp = timeIndex.sampleToDateTimeString((int)Math.round(e.timeSec * FS));
-            for (Metrics.Event e : rep.topLow)
+            }
+            for (Metrics.Event e : rep.topLow) {
                 e.timestamp = timeIndex.sampleToDateTimeString((int)Math.round(e.timeSec * FS));
+            }
             rep.studyStart = timeIndex.startDisplay;
         }
 
+        // Guardar en caché para ReportActivity
         String key = "rep_" + System.currentTimeMillis();
         ReportCache.put(key, rep);
 
         Intent intent = new Intent(this, ReportActivity.class);
         intent.putExtra("reportKey", key);
-
-        intent.putExtra("ecgPath", ecgPath);
-        intent.putExtra("tstPath", tstPath);
+        // También mandamos las rutas, para el borrado opcional al guardar PDF
+        if (ecgPath != null) intent.putExtra("ecgPath", ecgPath);
+        if (tstPath != null) intent.putExtra("tstPath", tstPath);
+        if (ecgUriStr != null) intent.putExtra("ecgUri", ecgUriStr); // ✅ NUEVO
         startActivity(intent);
-
-
-
     }
 
     // === Utilidad ===
@@ -406,7 +460,7 @@ public class DiagnosticoActivity extends AppCompatActivity {
 
     // === Render de grilla tipo papel ECG ===
     static class ECGPaperRenderer extends LineChartRenderer {
-        private final Paint thin, thick, bg, label;
+        private final Paint thin, thick, bg;
         private final float smallTime = 0.04f; // 40 ms
         private final float smallMV   = 0.1f;  // 0.1 mV
 
@@ -417,43 +471,49 @@ public class DiagnosticoActivity extends AppCompatActivity {
             thin = new Paint();  thin.setColor(Color.rgb(255,210,210)); thin.setStrokeWidth(1f);
             thick = new Paint(); thick.setColor(Color.rgb(255,120,120)); thick.setStrokeWidth(2f);
             bg = new Paint();    bg.setColor(Color.rgb(255,245,245));   bg.setStyle(Paint.Style.FILL);
-            label = new Paint(); label.setColor(Color.DKGRAY); label.setTextSize(30f); label.setAntiAlias(true);
         }
 
         @Override
         public void drawData(Canvas c) {
+            // fondo cuadriculado tipo papel ECG
             c.drawRect(mViewPortHandler.getContentRect(), bg);
 
             float xMin = mChart.getXChartMin(), xMax = mChart.getXChartMax();
             float yMin = mChart.getYChartMin(), yMax = mChart.getYChartMax();
 
-            // Verticales (tiempo)
+            // líneas verticales (tiempo)
             for (float x = xMin; x <= xMax; x += smallTime) {
                 float[] pts = new float[]{x, 0f};
                 mChart.getTransformer(YAxis.AxisDependency.LEFT).pointValuesToPixel(pts);
-                Paint p = (Math.abs((x / smallTime) % 5) < 0.001) ? thick : thin;
-                c.drawLine(pts[0], mViewPortHandler.contentTop(), pts[0], mViewPortHandler.contentBottom(), p);
+                Paint p = (Math.round(x / smallTime) % 5 == 0) ? thick : thin;
+                c.drawLine(
+                        pts[0],
+                        mViewPortHandler.contentTop(),
+                        pts[0],
+                        mViewPortHandler.contentBottom(),
+                        p
+                );
             }
-            // Horizontales (mV)
+
+            // líneas horizontales (mV)
             for (float y = yMin; y <= yMax; y += smallMV) {
                 float[] pts = new float[]{0f, y};
                 mChart.getTransformer(YAxis.AxisDependency.LEFT).pointValuesToPixel(pts);
-                Paint p = (Math.abs((y / smallMV) % 5) < 0.001) ? thick : thin;
-                c.drawLine(mViewPortHandler.contentLeft(), pts[1], mViewPortHandler.contentRight(), pts[1], p);
+                Paint p = (Math.round(y / smallMV) % 5 == 0) ? thick : thin;
+                c.drawLine(
+                        mViewPortHandler.contentLeft(),
+                        pts[1],
+                        mViewPortHandler.contentRight(),
+                        pts[1],
+                        p
+                );
             }
-
-            // Etiqueta del eje Y (opcional)
-            c.save();
-            c.rotate(-90, mViewPortHandler.contentLeft() - 50, mViewPortHandler.contentTop());
-            c.drawText("Amplitud (mV)", mViewPortHandler.contentLeft() - 70,
-                    mViewPortHandler.contentTop() + 100, label);
-            c.restore();
 
             super.drawData(c);
         }
     }
 
-    // === Parser simple del .TST (puedes expandirlo con tus bloques) ===
+    // === Parser del .TST con marcas de tiempo ===
     static class TstIndex {
         final TreeMap<Integer, Long> blockToMillis = new TreeMap<>();
         final int blockSize = 1024;
@@ -467,19 +527,26 @@ public class DiagnosticoActivity extends AppCompatActivity {
                 while ((line = br.readLine()) != null) {
                     line = line.trim();
                     if (line.isEmpty()) continue;
+
                     if (line.startsWith("OPEN,")) {
                         String ts = line.substring(5).trim();
-                        Date d = fmt.parse(ts);
-                        if (d != null) {
-                            ti.blockToMillis.put(0, d.getTime());
-                            ti.startDisplay = ts;
-                        }
+                        try {
+                            Date d = fmt.parse(ts);
+                            if (d != null) {
+                                ti.blockToMillis.put(0, d.getTime());
+                                ti.startDisplay = ts;
+                            }
+                        } catch (Exception ignored) {}
                     } else {
                         String[] parts = line.split(",");
                         if (parts.length == 2) {
-                            int blk = Integer.parseInt(parts[0]);
-                            Date d = fmt.parse(parts[1]);
-                            if (d != null) ti.blockToMillis.put(blk, d.getTime());
+                            try {
+                                int blk = Integer.parseInt(parts[0]);
+                                Date d = fmt.parse(parts[1]);
+                                if (d != null) {
+                                    ti.blockToMillis.put(blk, d.getTime());
+                                }
+                            } catch (Exception ignored) {}
                         }
                     }
                 }
@@ -515,8 +582,9 @@ public class DiagnosticoActivity extends AppCompatActivity {
         super.onResume();
         if (ecgChart != null && ecgChart.getData() != null) {
             ViewPortHandler h = ecgChart.getViewPortHandler();
+
             float px = h.contentLeft() + h.contentWidth() / 2f;
-            float py = h.contentTop() + h.contentHeight() / 2f;
+            float py = h.contentTop()  + h.contentHeight() / 2f;
 
             float curScaleX = h.getScaleX();
             float curScaleY = h.getScaleY();

@@ -1,5 +1,7 @@
 package com.tuapp.ecg;
 
+import androidx.documentfile.provider.DocumentFile;
+
 import android.content.ContentValues;
 import android.graphics.Color;
 import android.graphics.pdf.PdfDocument;
@@ -17,18 +19,19 @@ import java.io.File;
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.List;
 import java.util.Locale;
 
 public class ReportActivity extends AppCompatActivity {
 
+    // === DIRECTIVA PARA ELIMINAR ARCHIVOS DESPUÉS DE GUARDAR PDF ===
+    private static final boolean AUTO_DELETE_AFTER_PDF = true;
+
     EditText edMedico, edLugar, edFecha, edDuracion,
             edPaciente, edDni, edEdad, edSexo,
             edAntecedentes, edRecomendaciones, edResultados;
-    TextView txtEventosHigh, txtEventosLow, txtResumen;
+    TextView txtEventosHigh, txtEventosLow, txtResumen, txtClinicos;
     Button btnGuardar;
     Metrics.Report rep;
-    TextView txtClinicos;
 
     @Override
     protected void onCreate(Bundle b) {
@@ -49,69 +52,68 @@ public class ReportActivity extends AppCompatActivity {
         txtEventosHigh = findViewById(R.id.txtEventosHigh);
         txtEventosLow  = findViewById(R.id.txtEventosLow);
         txtResumen     = findViewById(R.id.txtResumen);
-        txtClinicos = findViewById(R.id.txtClinicos);
+        txtClinicos    = findViewById(R.id.txtClinicos);
         btnGuardar     = findViewById(R.id.btnGuardar);
 
-        // Recuperar el reporte desde la caché temporal
-        String key = getIntent().getStringExtra("reportKey");
-        rep = ReportCache.get(key);
-        if (rep == null) {
-            Toast.makeText(this, "Error: no se pudo cargar el reporte.", Toast.LENGTH_LONG).show();
-            finish();
-            return;
-        }
+        try {
+            String key = getIntent().getStringExtra("reportKey");
+            rep = ReportCache.get(key);
+            if (rep == null) {
+                Log.e("ECG_DEBUG", "Error: ReportCache devolvió null para key=" + key);
+                Toast.makeText(this, "Error: no se pudo cargar el reporte.", Toast.LENGTH_LONG).show();
+                finish();
+                return;
+            }
 
-        String fecha = (rep.studyStart != null)
-                ? rep.studyStart
-                : new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(new Date());
+            String fecha = (rep.studyStart != null)
+                    ? rep.studyStart
+                    : new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(new Date());
 
-        edFecha.setText(fecha);
-        edDuracion.setText(String.format(Locale.US, "%.1f s", rep.durationSec));
-        edResultados.setText(String.format(Locale.US,
-                "Frecuencia cardíaca promedio: %.1f lpm\nMáxima: %.1f lpm\nMínima: %.1f lpm",
-                rep.bpmMean, rep.bpmMax, rep.bpmMin));
+            edFecha.setText(fecha);
+            edDuracion.setText(String.format(Locale.US, "%.1f s", rep.durationSec));
+            edResultados.setText(String.format(Locale.US,
+                    "Frecuencia media: %.1f LPM\nFrecuencia mínima: %.1f LPM\nFrecuencia máxima: %.1f LPM",
+                    rep.bpmMean, rep.bpmMin, rep.bpmMax));
 
-        // ✅ Mostrar eventos con hora absoluta si existe
-        txtEventosHigh.setText(formatDetailedEvents(rep.topHigh, ">100 lpm"));
-        txtEventosLow.setText(formatDetailedEvents(rep.topLow, "<60 lpm"));
+            // Manejo seguro de eventos
+            txtEventosHigh.setText(formatDetailedEvents(rep.topHigh, ">100 lpm"));
+            txtEventosLow.setText(formatDetailedEvents(rep.topLow, "<60 lpm"));
+            txtResumen.setText(""); // no mostrar "Archivo: ..."
 
-        // Eliminamos el texto redundante de resumen en la vista Android
-        txtResumen.setText("");
+            // Métricas clínicas extendidas
+            if (rep.extended != null) {
+                Metrics.ECGStats st = rep.extended;
+                String resumenClinico = String.format(Locale.US,
+                        "Frecuencia media: %.1f LPM\nFrecuencia mínima: %.1f LPM\nFrecuencia máxima: %.1f LPM\n" +
+                                "Episodios de taquicardia (>100 LPM): %d\n" +
+                                "Episodios de bradicardia (<60 LPM): %d\n" +
+                                "Pausas (>2s): %d\n" +
+                                "PVC detectadas: %d\nPAC detectadas: %d\n" +
+                                "Parejas ventriculares: %d\n" +
+                                "Rachas de 3 latidos (triple): %d\n" +
+                                "Bigeminia: %d\nTrigeminia: %d",
+                        st.avgHR, st.minHR, st.maxHR,
+                        st.tachyCount, st.bradyCount, st.pauseCount,
+                        st.pvcCount, st.pacCount,
+                        st.coupletCount, st.tripletCount,
+                        st.bigeminyCount, st.trigeminyCount
+                );
+                txtClinicos.setText(resumenClinico);
+            } else {
+                txtClinicos.setText("(No se calcularon métricas clínicas extendidas)");
+            }
 
-        // ✅ Resultados clínicos
-        if (rep.extended != null) {
-            Metrics.ECGStats st = rep.extended;
-            String resumenClinico = String.format(Locale.US,
-                    "Frecuencia media: %.1f LPM\n" +
-                            "Frecuencia mínima: %.1f LPM\n" +
-                            "Frecuencia máxima: %.1f LPM\n" +
-                            "Episodios de taquicardia (>100 LPM): %d\n" +
-                            "Episodios de bradicardia (<60 LPM): %d\n" +
-                            "Pausas (>2s): %d\n" +
-                            "PVC detectadas: %d\n" +
-                            "PAC detectadas: %d\n" +
-                            "Parejas ventriculares: %d\n" +
-                            "Rachas de 3 latidos (triple): %d\n" +
-                            "Bigeminia: %d\n" +
-                            "Trigeminia: %d",
-                    st.avgHR, st.minHR, st.maxHR,
-                    st.tachyCount, st.bradyCount, st.pauseCount,
-                    st.pvcCount, st.pacCount,
-                    st.coupletCount, st.tripletCount,
-                    st.bigeminyCount, st.trigeminyCount
-            );
-            txtClinicos.setText(resumenClinico);
-        } else {
-            txtClinicos.setText("(No se calcularon métricas clínicas extendidas)");
+        } catch (Exception e) {
+            Log.e("ECG_DEBUG", "Error inicializando ReportActivity", e);
+            Toast.makeText(this, "Error al cargar el reporte.", Toast.LENGTH_LONG).show();
         }
 
         btnGuardar.setOnClickListener(v -> confirmAndSave());
     }
 
-    /** ✅ Muestra eventos en formato detallado */
-    private String formatDetailedEvents(List<Metrics.Event> list, String title) {
+    private String formatDetailedEvents(java.util.List<Metrics.Event> list, String title) {
         StringBuilder sb = new StringBuilder();
-        sb.append(title).append("\n");
+        sb.append("\n").append(title).append("\n");
         if (list == null || list.isEmpty()) {
             sb.append("(sin eventos)\n");
             return sb.toString();
@@ -144,19 +146,19 @@ public class ReportActivity extends AppCompatActivity {
             p.setTextSize(12f);
             p.setColor(Color.BLACK);
 
-            int y = 50;
+            int y = 40;
 
             // === Encabezado centrado ===
-            android.graphics.Paint title = new android.graphics.Paint(p);
+            android.graphics.Paint title = new android.graphics.Paint();
             title.setTextSize(16f);
-            title.setFakeBoldText(true);
+            title.setColor(Color.BLACK);
             title.setTextAlign(android.graphics.Paint.Align.CENTER);
             c.drawText("REPORTE CLÍNICO - MONITOREO ECG", info.getPageWidth() / 2f, y, title);
-            y += 25;
+            y += 20;
             c.drawText("Derivación: I (config. Einthoven modificada)", info.getPageWidth() / 2f, y, title);
-            y += 40;
+            y += 30;
 
-            // === Datos del paciente ===
+            // === Datos generales ===
             y = drawLine(c, p, y, "Médico: ", edMedico);
             y = drawLine(c, p, y, "Lugar/Centro de salud: ", edLugar);
             y = drawLine(c, p, y, "Fecha: ", edFecha);
@@ -166,24 +168,21 @@ public class ReportActivity extends AppCompatActivity {
             y = drawLine(c, p, y, "Edad: ", edEdad);
             y = drawLine(c, p, y, "Sexo: ", edSexo);
             y += 20;
+
+            // === Secciones ===
             y = drawMultiline(c, p, y, "Antecedentes personales:", edAntecedentes);
-            y += 25;
-
-            // === Resultados clínicos ===
+            y += 20;
             y = drawMultilineRaw(c, p, y, "", txtClinicos.getText().toString());
-            y += 25;
-
-            // === Eventos ===
+            y += 20;
             y = drawMultilineRaw(c, p, y, "Eventos (>100 lpm):", txtEventosHigh.getText().toString());
-            y += 20;
+            y += 18;
             y = drawMultilineRaw(c, p, y, "Eventos (<60 lpm):", txtEventosLow.getText().toString());
-            y += 20;
-
-            // === Recomendaciones ===
+            y += 18;
             y = drawMultiline(c, p, y, "Recomendaciones:", edRecomendaciones);
 
             pdf.finishPage(page);
 
+            // === Guardar ===
             String name = "ReporteECG_" +
                     new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ".pdf";
             Uri uri = createDownloadUri(name);
@@ -197,55 +196,8 @@ public class ReportActivity extends AppCompatActivity {
             pdf.close();
             Toast.makeText(this, "✅ PDF guardado en Descargas: " + name, Toast.LENGTH_LONG).show();
 
-            // === Eliminación opcional de archivos ECG/TST ===
-            final boolean AUTO_DELETE_AFTER_PDF = true; // <— Activa o desactiva la función globalmente
-
             if (AUTO_DELETE_AFTER_PDF) {
-                new androidx.appcompat.app.AlertDialog.Builder(this)
-                        .setTitle("Eliminar archivos originales")
-                        .setMessage("¿Desea eliminar los archivos .ECG y .TST después de guardar el reporte en PDF?")
-                        .setPositiveButton("Sí", (dialog, which) -> {
-                            try {
-                                int deleted = 0;
-
-                                // Archivos originales pasados por Intent
-                                String ecgPath = getIntent().getStringExtra("ecgPath");
-                                String tstPath = getIntent().getStringExtra("tstPath");
-                                if (ecgPath != null) {
-                                    File fEcg = new File(ecgPath);
-                                    if (fEcg.exists() && fEcg.delete()) deleted++;
-                                }
-                                if (tstPath != null) {
-                                    File fTst = new File(tstPath);
-                                    if (fTst.exists() && fTst.delete()) deleted++;
-                                }
-
-                                // Archivos en caché
-                                File cacheDir = getCacheDir();
-                                if (cacheDir != null && cacheDir.isDirectory()) {
-                                    File[] files = cacheDir.listFiles();
-                                    if (files != null) {
-                                        for (File f : files) {
-                                            String n = f.getName().toUpperCase(Locale.US);
-                                            if (n.endsWith(".ECG") || n.endsWith(".TST")) {
-                                                if (f.delete()) deleted++;
-                                            }
-                                        }
-                                    }
-                                }
-
-                                Toast.makeText(this,
-                                        "🗑 Archivos .ECG/.TST eliminados (" + deleted + ")", Toast.LENGTH_LONG).show();
-                                Log.i("ECG_DEBUG", "Auto-delete tras PDF: eliminados " + deleted + " archivos.");
-
-                            } catch (Exception e) {
-                                Log.e("ECG_DEBUG", "Error eliminando archivos ECG/TST", e);
-                                Toast.makeText(this, "⚠️ Error al eliminar archivos", Toast.LENGTH_SHORT).show();
-                            }
-                        })
-                        .setNegativeButton("No", (dialog, which) ->
-                                Toast.makeText(this, "Archivos conservados.", Toast.LENGTH_SHORT).show())
-                        .show();
+                promptFileDeletion();
             }
 
         } catch (Exception ex) {
@@ -254,7 +206,130 @@ public class ReportActivity extends AppCompatActivity {
         }
     }
 
-    // === Utilidades de dibujo en PDF ===
+    private void promptFileDeletion() {
+        new AlertDialog.Builder(this)
+                .setTitle("Eliminar archivos originales")
+                .setMessage("¿Desea eliminar los archivos .ECG y .TST después de guardar el reporte en PDF?")
+                .setPositiveButton("Sí", (dialog, which) -> {
+                    String ecgPath = getIntent().getStringExtra("ecgPath");
+                    String tstPath = getIntent().getStringExtra("tstPath");
+                    String ecgUriStr = getIntent().getStringExtra("ecgUri");
+
+                    int deleted = 0;
+                    if (deleteFileUniversal(ecgPath)) deleted++;
+                    if (deleteFileUniversal(tstPath)) deleted++;
+
+                    // 🔹 Eliminar también desde el URI SAF (cualquier ubicación)
+                    if (ecgUriStr != null) {
+                        try {
+                            Uri uri = normalizeUri(Uri.parse(ecgUriStr));
+                            Log.d("ECG_DEBUG", "Intentando eliminar con SAF: " + uri);
+
+                            boolean ok = false;
+                            DocumentFile doc = DocumentFile.fromSingleUri(this, uri);
+                            if (doc != null && doc.canWrite() && doc.exists()) {
+                                ok = doc.delete();
+                                Log.d("ECG_DEBUG", "Eliminado por SAF directo=" + ok + " → " + uri);
+                            }
+
+                            if (!ok) {
+                                // 🔸 Fallback: intentar eliminar por ruta física
+                                String decoded = Uri.decode(uri.toString());
+
+                                // Eliminar prefijos conocidos de SAF
+                                decoded = decoded
+                                        .replace("content://com.android.providers.downloads.documents/document/raw%3A", "")
+                                        .replace("content://com.android.providers.downloads.documents/document/", "")
+                                        .replace("file://", "");
+
+                                File f = new File(decoded);
+                                if (f.exists()) {
+                                    Log.d("ECG_DEBUG", "Intentando eliminar por ruta directa: " + f.getAbsolutePath());
+                                    ok = f.delete();
+
+                                    // Si aún no se elimina, forzar con comando rm
+                                    if (!ok) {
+                                        Process p = Runtime.getRuntime().exec("rm -f \"" + f.getAbsolutePath() + "\"");
+                                        p.waitFor();
+                                        ok = !f.exists();
+                                    }
+                                } else {
+                                    Log.w("ECG_DEBUG", "Archivo no encontrado para eliminación directa: " + decoded);
+                                }
+                            }
+
+                            Log.d("ECG_DEBUG", "Eliminado universal=" + ok + " → " + uri);
+                            if (ok) deleted++;
+
+                        } catch (Exception e) {
+                            Log.e("ECG_DEBUG", "Error al eliminar con SAF: " + ecgUriStr, e);
+                        }
+                    }
+
+
+
+
+                    Toast.makeText(this, "🗑 Archivos eliminados (" + deleted + ")", Toast.LENGTH_LONG).show();
+                })
+                .setNegativeButton("No", (dialog, which) ->
+                        Toast.makeText(this, "Archivos conservados.", Toast.LENGTH_SHORT).show())
+                .show();
+    }
+    private Uri normalizeUri(Uri uri) {
+        try {
+            String s = uri.toString();
+            if (s.contains("raw%3A") || s.contains("raw:")) {
+                s = s.replace("raw%3A", "").replace("raw:", "");
+                return Uri.parse(Uri.decode(s));
+            }
+        } catch (Exception e) {
+            Log.w("ECG_DEBUG", "normalizeUri: fallo al normalizar URI", e);
+        }
+        return uri;
+    }
+
+
+    private boolean deleteFileUniversal(String path) {
+        if (path == null || path.trim().isEmpty()) return false;
+        try {
+            File f = new File(path);
+            if (!f.exists()) return false;
+
+            // ✅ Si pertenece al cache interno, basta con delete()
+            if (path.startsWith(getCacheDir().getAbsolutePath())) {
+                boolean ok = f.delete();
+                Log.d("ECG_DEBUG", "deleteFileUniversal: cache interno eliminado=" + ok + " → " + path);
+                return ok;
+            }
+
+            // Archivos externos o públicos
+            if (f.delete()) return true;
+
+            Uri uri = Uri.fromFile(f);
+            int res = getContentResolver().delete(uri, null, null);
+            if (res > 0) return true;
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                Uri externalUri = MediaStore.Files.getContentUri("external");
+                res = getContentResolver().delete(
+                        externalUri,
+                        MediaStore.MediaColumns.DISPLAY_NAME + "=?",
+                        new String[]{f.getName()});
+                if (res > 0) return true;
+            }
+
+            Process p = Runtime.getRuntime().exec("rm -f " + path);
+            p.waitFor();
+            return !f.exists();
+
+        } catch (Exception e) {
+            Log.e("ECG_DEBUG", "Error al eliminar archivo: " + path, e);
+            return false;
+        }
+    }
+
+
+    // === Utilidades gráficas ===
     private int drawLine(android.graphics.Canvas c, android.graphics.Paint p, int y, String label, EditText ed) {
         c.drawText(label + safe(ed.getText()), 40, y, p);
         return y + 18;
@@ -291,7 +366,6 @@ public class ReportActivity extends AppCompatActivity {
         cv.put(MediaStore.MediaColumns.DISPLAY_NAME, displayName);
         cv.put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf");
         cv.put(MediaStore.MediaColumns.RELATIVE_PATH, "Download/");
-
         Uri uri;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
@@ -301,10 +375,7 @@ public class ReportActivity extends AppCompatActivity {
             File file = new File(downloads, displayName);
             uri = Uri.fromFile(file);
         }
-
-        if (uri == null)
-            throw new Exception("No se pudo crear el archivo en Descargas");
-
+        if (uri == null) throw new Exception("No se pudo crear el archivo en Descargas");
         return uri;
     }
 }
