@@ -266,14 +266,18 @@ public class ReportActivity extends AppCompatActivity {
                     String ecgUriStr = getIntent().getStringExtra("ecgUri");
 
                     int deleted = 0;
-                    if (deleteFileUniversal(ecgPath)) deleted++;
-                    if (deleteFileUniversal(tstPath)) deleted++;
+                    deleted += deleteFileUniversalCount(ecgPath);
+                    deleted += deleteFileUniversalCount(tstPath);
 
                     if (ecgUriStr != null) {
-                        Uri ecgUri = normalizeUri(Uri.parse(ecgUriStr));
-                        eliminarPorSAFUniversal(ecgUri);
-                        Uri tstUri = Uri.parse(ecgUriStr.replace(".ECG", ".TST"));
-                        eliminarPorSAFUniversal(normalizeUri(tstUri));
+                        try {
+                            Uri ecgUri = normalizeUri(Uri.parse(ecgUriStr));
+                            eliminarPorSAFUniversal(ecgUri);
+                            Uri tstUri = Uri.parse(ecgUriStr.replace(".ECG", ".TST"));
+                            eliminarPorSAFUniversal(normalizeUri(tstUri));
+                        } catch (Exception e) {
+                            Log.e("ECG_DEBUG", "Error eliminando vía SAF", e);
+                        }
                     }
 
                     Toast.makeText(this, "🗑 Archivos eliminados (" + deleted + ")", Toast.LENGTH_LONG).show();
@@ -282,6 +286,41 @@ public class ReportActivity extends AppCompatActivity {
                         Toast.makeText(this, "Archivos conservados.", Toast.LENGTH_SHORT).show())
                 .show();
     }
+    /**
+     * Variante de deleteFileUniversal() que devuelve la cantidad exacta de archivos eliminados (0, 1 o 2)
+     */
+    private int deleteFileUniversalCount(String path) {
+        if (path == null || path.trim().isEmpty()) return 0;
+        int count = 0;
+
+        try {
+            File f = new File(path);
+            String fileName = f.getName();
+            String tstName = null;
+
+            if (fileName.toUpperCase(Locale.US).endsWith(".ECG")) {
+                tstName = fileName.substring(0, fileName.lastIndexOf(".")) + ".TST";
+            }
+
+            // Usa el método existente que ya borra universalmente
+            if (deleteFileUniversal(path)) count++;
+
+            // Verifica si existe su pareja .TST en la misma carpeta
+            if (tstName != null) {
+                File fTst = new File(f.getParent(), tstName);
+                if (fTst.exists() && fTst.delete()) {
+                    count++;
+                    Log.d("ECG_DEBUG", "deleteFileUniversalCount: TST borrado → " + fTst.getAbsolutePath());
+                }
+            }
+
+        } catch (Exception e) {
+            Log.e("ECG_DEBUG", "Error en deleteFileUniversalCount()", e);
+        }
+
+        return count;
+    }
+
 
 
     // 🧩 BORRADO UNIVERSAL ACTUALIZADO
