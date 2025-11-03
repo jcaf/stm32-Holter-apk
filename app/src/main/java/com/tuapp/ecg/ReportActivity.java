@@ -1,8 +1,12 @@
 package com.tuapp.ecg;
 
 import androidx.documentfile.provider.DocumentFile;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.ContentValues;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.pdf.PdfDocument;
 import android.net.Uri;
@@ -12,8 +16,6 @@ import android.provider.MediaStore;
 import android.text.Editable;
 import android.util.Log;
 import android.widget.*;
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
 
 import java.io.File;
 import java.io.OutputStream;
@@ -25,6 +27,7 @@ public class ReportActivity extends AppCompatActivity {
 
     // === DIRECTIVA PARA ELIMINAR ARCHIVOS DESPUÉS DE GUARDAR PDF ===
     private static final boolean AUTO_DELETE_AFTER_PDF = true;
+    private static final int REQ_SAF_ACCESS = 1001;
 
     EditText edMedico, edLugar, edFecha, edDuracion,
             edPaciente, edDni, edEdad, edSexo,
@@ -39,21 +42,21 @@ public class ReportActivity extends AppCompatActivity {
         setContentView(R.layout.activity_report);
 
         edMedico = findViewById(R.id.edMedico);
-        edLugar  = findViewById(R.id.edLugar);
-        edFecha  = findViewById(R.id.edFecha);
+        edLugar = findViewById(R.id.edLugar);
+        edFecha = findViewById(R.id.edFecha);
         edDuracion = findViewById(R.id.edDuracion);
         edPaciente = findViewById(R.id.edPaciente);
-        edDni      = findViewById(R.id.edDni);
-        edEdad     = findViewById(R.id.edEdad);
-        edSexo     = findViewById(R.id.edSexo);
+        edDni = findViewById(R.id.edDni);
+        edEdad = findViewById(R.id.edEdad);
+        edSexo = findViewById(R.id.edSexo);
         edAntecedentes = findViewById(R.id.edAntecedentes);
         edRecomendaciones = findViewById(R.id.edRecomendaciones);
         edResultados = findViewById(R.id.edResultados);
         txtEventosHigh = findViewById(R.id.txtEventosHigh);
-        txtEventosLow  = findViewById(R.id.txtEventosLow);
-        txtResumen     = findViewById(R.id.txtResumen);
-        txtClinicos    = findViewById(R.id.txtClinicos);
-        btnGuardar     = findViewById(R.id.btnGuardar);
+        txtEventosLow = findViewById(R.id.txtEventosLow);
+        txtResumen = findViewById(R.id.txtResumen);
+        txtClinicos = findViewById(R.id.txtClinicos);
+        btnGuardar = findViewById(R.id.btnGuardar);
 
         try {
             String key = getIntent().getStringExtra("reportKey");
@@ -75,12 +78,10 @@ public class ReportActivity extends AppCompatActivity {
                     "Frecuencia media: %.1f LPM\nFrecuencia mínima: %.1f LPM\nFrecuencia máxima: %.1f LPM",
                     rep.bpmMean, rep.bpmMin, rep.bpmMax));
 
-            // Manejo seguro de eventos
             txtEventosHigh.setText(formatDetailedEvents(rep.topHigh, ">100 lpm"));
             txtEventosLow.setText(formatDetailedEvents(rep.topLow, "<60 lpm"));
-            txtResumen.setText(""); // no mostrar "Archivo: ..."
+            txtResumen.setText("");
 
-            // Métricas clínicas extendidas
             if (rep.extended != null) {
                 Metrics.ECGStats st = rep.extended;
                 String resumenClinico = String.format(Locale.US,
@@ -139,7 +140,7 @@ public class ReportActivity extends AppCompatActivity {
     private void savePdf() {
         try {
             PdfDocument pdf = new PdfDocument();
-            PdfDocument.PageInfo info = new PdfDocument.PageInfo.Builder(595, 842, 1).create(); // A4
+            PdfDocument.PageInfo info = new PdfDocument.PageInfo.Builder(595, 842, 1).create();
             PdfDocument.Page page = pdf.startPage(info);
             android.graphics.Canvas c = page.getCanvas();
             android.graphics.Paint p = new android.graphics.Paint();
@@ -148,7 +149,6 @@ public class ReportActivity extends AppCompatActivity {
 
             int y = 40;
 
-            // === Encabezado centrado ===
             android.graphics.Paint title = new android.graphics.Paint();
             title.setTextSize(16f);
             title.setColor(Color.BLACK);
@@ -158,7 +158,6 @@ public class ReportActivity extends AppCompatActivity {
             c.drawText("Derivación: I (config. Einthoven modificada)", info.getPageWidth() / 2f, y, title);
             y += 30;
 
-            // === Datos generales ===
             y = drawLine(c, p, y, "Médico: ", edMedico);
             y = drawLine(c, p, y, "Lugar/Centro de salud: ", edLugar);
             y = drawLine(c, p, y, "Fecha: ", edFecha);
@@ -169,7 +168,6 @@ public class ReportActivity extends AppCompatActivity {
             y = drawLine(c, p, y, "Sexo: ", edSexo);
             y += 20;
 
-            // === Secciones ===
             y = drawMultiline(c, p, y, "Antecedentes personales:", edAntecedentes);
             y += 20;
             y = drawMultilineRaw(c, p, y, "", txtClinicos.getText().toString());
@@ -182,7 +180,6 @@ public class ReportActivity extends AppCompatActivity {
 
             pdf.finishPage(page);
 
-            // === Guardar ===
             String name = "ReporteECG_" +
                     new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ".pdf";
             Uri uri = createDownloadUri(name);
@@ -205,6 +202,31 @@ public class ReportActivity extends AppCompatActivity {
             Toast.makeText(this, "Error al guardar PDF: " + ex.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
+
+    private void requestSAFPermission() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        startActivityForResult(intent, REQ_SAF_ACCESS);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQ_SAF_ACCESS && resultCode == RESULT_OK) {
+            Uri treeUri = data.getData();
+            getContentResolver().takePersistableUriPermission(
+                    treeUri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            );
+            getSharedPreferences("ecg", MODE_PRIVATE).edit()
+                    .putString("treeUri", treeUri.toString())
+                    .apply();
+            Log.d("ECG_DEBUG", "Permiso SAF guardado → " + treeUri);
+        }
+    }
+
     private Uri normalizeUri(Uri uri) {
         try {
             String s = uri.toString();
@@ -217,40 +239,15 @@ public class ReportActivity extends AppCompatActivity {
         }
         return uri;
     }
+
     private boolean eliminarPorSAFUniversal(Uri uri) {
         try {
             boolean ok = false;
             DocumentFile doc = DocumentFile.fromSingleUri(this, uri);
-
             if (doc != null && doc.canWrite() && doc.exists()) {
                 ok = doc.delete();
                 Log.d("ECG_DEBUG", "Eliminado por SAF directo=" + ok + " → " + uri);
             }
-
-            if (!ok) {
-                // Fallback universal (ruta física)
-                String decoded = Uri.decode(uri.toString());
-                decoded = decoded
-                        .replace("content://com.android.providers.downloads.documents/document/raw%3A", "")
-                        .replace("content://com.android.providers.downloads.documents/document/", "")
-                        .replace("file://", "");
-
-                File f = new File(decoded);
-                if (f.exists()) {
-                    Log.d("ECG_DEBUG", "Intentando eliminar por ruta directa: " + f.getAbsolutePath());
-                    ok = f.delete();
-
-                    if (!ok) {
-                        Process p = Runtime.getRuntime().exec("rm -f \"" + f.getAbsolutePath() + "\"");
-                        p.waitFor();
-                        ok = !f.exists();
-                    }
-                } else {
-                    Log.w("ECG_DEBUG", "Archivo no encontrado para eliminación directa: " + decoded);
-                }
-            }
-
-            Log.d("ECG_DEBUG", "Eliminado universal=" + ok + " → " + uri);
             return ok;
         } catch (Exception e) {
             Log.e("ECG_DEBUG", "Error en eliminarPorSAFUniversal: " + uri, e);
@@ -258,6 +255,7 @@ public class ReportActivity extends AppCompatActivity {
         }
     }
 
+    // 🧩 PROMPT ACTUALIZADO
     private void promptFileDeletion() {
         new AlertDialog.Builder(this)
                 .setTitle("Eliminar archivos originales")
@@ -271,27 +269,11 @@ public class ReportActivity extends AppCompatActivity {
                     if (deleteFileUniversal(ecgPath)) deleted++;
                     if (deleteFileUniversal(tstPath)) deleted++;
 
-                    // 🔹 Intentar eliminar el ECG mediante SAF (universal)
                     if (ecgUriStr != null) {
-                        try {
-                            Uri ecgUri = normalizeUri(Uri.parse(ecgUriStr));
-                            Log.d("ECG_DEBUG", "Intentando eliminar ECG con SAF: " + ecgUri);
-                            boolean ok = eliminarPorSAFUniversal(ecgUri);
-                            if (ok) deleted++;
-                        } catch (Exception e) {
-                            Log.e("ECG_DEBUG", "Error al eliminar ECG con SAF", e);
-                        }
-
-                        // 🔹 Intentar también eliminar el TST correspondiente, si existe
-                        try {
-                            String tstName = new File(Uri.decode(ecgUriStr)).getName().replace(".ECG", ".TST");
-                            Uri tstUri = Uri.parse(ecgUriStr.replace(".ECG", ".TST"));
-                            Log.d("ECG_DEBUG", "Intentando eliminar TST con SAF: " + tstUri);
-                            boolean okTst = eliminarPorSAFUniversal(normalizeUri(tstUri));
-                            if (okTst) deleted++;
-                        } catch (Exception e) {
-                            Log.e("ECG_DEBUG", "Error al eliminar TST con SAF", e);
-                        }
+                        Uri ecgUri = normalizeUri(Uri.parse(ecgUriStr));
+                        eliminarPorSAFUniversal(ecgUri);
+                        Uri tstUri = Uri.parse(ecgUriStr.replace(".ECG", ".TST"));
+                        eliminarPorSAFUniversal(normalizeUri(tstUri));
                     }
 
                     Toast.makeText(this, "🗑 Archivos eliminados (" + deleted + ")", Toast.LENGTH_LONG).show();
@@ -302,45 +284,93 @@ public class ReportActivity extends AppCompatActivity {
     }
 
 
-
-
+    // 🧩 BORRADO UNIVERSAL ACTUALIZADO
+    /**
+     * Elimina un archivo y su pareja .TST universalmente (interno, SAF o MediaStore) en Android 11+.
+     */
     private boolean deleteFileUniversal(String path) {
         if (path == null || path.trim().isEmpty()) return false;
+        boolean ok = false;
+        boolean okTst = false;
+
         try {
             File f = new File(path);
-            if (!f.exists()) return false;
+            String fileName = f.getName();
+            String tstName = null;
 
-            // ✅ Si pertenece al cache interno, basta con delete()
-            if (path.startsWith(getCacheDir().getAbsolutePath())) {
-                boolean ok = f.delete();
-                Log.d("ECG_DEBUG", "deleteFileUniversal: cache interno eliminado=" + ok + " → " + path);
-                return ok;
+            // Si el archivo es .ECG, calcula el .TST correspondiente
+            if (fileName.toUpperCase(Locale.US).endsWith(".ECG")) {
+                tstName = fileName.substring(0, fileName.lastIndexOf(".")) + ".TST";
             }
 
-            // Archivos externos o públicos
-            if (f.delete()) return true;
+            // --- 1️⃣ Intentar vía SAF persistente (si existe permiso) ---
+            SharedPreferences sp = getSharedPreferences("ecg", MODE_PRIVATE);
+            String treeStr = sp.getString("treeUri", null);
 
-            Uri uri = Uri.fromFile(f);
-            int res = getContentResolver().delete(uri, null, null);
-            if (res > 0) return true;
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                Uri externalUri = MediaStore.Files.getContentUri("external");
-                res = getContentResolver().delete(
-                        externalUri,
-                        MediaStore.MediaColumns.DISPLAY_NAME + "=?",
-                        new String[]{f.getName()});
-                if (res > 0) return true;
+            if (treeStr != null) {
+                Uri treeUri = Uri.parse(treeStr);
+                DocumentFile dir = DocumentFile.fromTreeUri(this, treeUri);
+                if (dir != null && dir.canWrite()) {
+                    for (DocumentFile df : dir.listFiles()) {
+                        if (df.getName() == null) continue;
+                        if (df.getName().equals(fileName)) {
+                            ok = df.delete();
+                            Log.d("ECG_DEBUG", "deleteFileUniversal: SAF borrado=" + ok + " → " + fileName);
+                        }
+                        if (tstName != null && df.getName().equals(tstName)) {
+                            okTst = df.delete();
+                            Log.d("ECG_DEBUG", "deleteFileUniversal: SAF borrado TST=" + okTst + " → " + tstName);
+                        }
+                    }
+                }
             }
 
-            Process p = Runtime.getRuntime().exec("rm -f " + path);
-            p.waitFor();
-            return !f.exists();
+            // --- 2️⃣ Intentar vía MediaStore ---
+            if ((!ok || !okTst) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                try {
+                    Uri mediaUri = MediaStore.Downloads.EXTERNAL_CONTENT_URI;
+                    if (!ok) {
+                        int deletedRows = getContentResolver().delete(
+                                mediaUri,
+                                MediaStore.MediaColumns.DISPLAY_NAME + "=?",
+                                new String[]{fileName}
+                        );
+                        ok = deletedRows > 0;
+                        Log.d("ECG_DEBUG", "deleteFileUniversal: MediaStore borrado=" + ok + " → " + fileName);
+                    }
+                    if (!okTst && tstName != null) {
+                        int deletedTst = getContentResolver().delete(
+                                mediaUri,
+                                MediaStore.MediaColumns.DISPLAY_NAME + "=?",
+                                new String[]{tstName}
+                        );
+                        okTst = deletedTst > 0;
+                        Log.d("ECG_DEBUG", "deleteFileUniversal: MediaStore borrado TST=" + okTst + " → " + tstName);
+                    }
+                } catch (Exception e) {
+                    Log.w("ECG_DEBUG", "deleteFileUniversal: error en MediaStore delete", e);
+                }
+            }
+
+            // --- 3️⃣ Último recurso: File.delete() clásico ---
+            if (!ok && f.exists()) {
+                ok = f.delete();
+                Log.d("ECG_DEBUG", "deleteFileUniversal: borrado interno=" + ok + " → " + f.getAbsolutePath());
+            }
+
+            if (!okTst && tstName != null) {
+                File fTst = new File(f.getParent(), tstName);
+                if (fTst.exists()) {
+                    okTst = fTst.delete();
+                    Log.d("ECG_DEBUG", "deleteFileUniversal: borrado interno TST=" + okTst + " → " + fTst.getAbsolutePath());
+                }
+            }
 
         } catch (Exception e) {
-            Log.e("ECG_DEBUG", "Error al eliminar archivo: " + path, e);
-            return false;
+            Log.e("ECG_DEBUG", "Error en deleteFileUniversal()", e);
         }
+
+        return ok || okTst;
     }
 
 

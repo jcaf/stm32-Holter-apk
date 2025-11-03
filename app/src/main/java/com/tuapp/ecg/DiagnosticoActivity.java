@@ -135,6 +135,8 @@ public class DiagnosticoActivity extends AppCompatActivity {
         ecgChart.setPinchZoom(true);
         ecgChart.setDoubleTapToZoomEnabled(true);
         ecgChart.setAutoScaleMinMaxEnabled(true);
+        ecgChart.getDescription().setEnabled(false);   // 🔹 Desactiva la etiqueta "Description Label"
+
 
         XAxis xAxis = ecgChart.getXAxis();
         xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
